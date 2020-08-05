@@ -6,9 +6,9 @@ param (
 )
 
 $Parms = @{
-    Version = "1.1"
-    Author = "ZenitH-AT"
-    Description = "Checks for a new version of the Nvidia driver, downloads and installs it."
+	Version = "1.1"
+	Author = "ZenitH-AT"
+	Description = "Checks for a new version of the Nvidia driver, downloads and installs it."
 }
 
 
@@ -215,23 +215,23 @@ if (!(Get-NetRoute | ? DestinationPrefix -eq '0.0.0.0/0' | Get-NetIPInterface | 
 $7zInstalled = $false
 
 if (Test-Path "HKLM:\SOFTWARE\7-Zip") {
-    $7zpath = Get-ItemProperty -path  HKLM:\SOFTWARE\7-Zip\ -Name Path
-    $7zpath = $7zpath.Path
-    $7zpathexe = $7zpath + "7z.exe"
+	$7zpath = Get-ItemProperty -path  HKLM:\SOFTWARE\7-Zip\ -Name Path
+	$7zpath = $7zpath.Path
+	$7zpathexe = $7zpath + "7z.exe"
 
-    if ((Test-Path $7zpathexe) -eq $true) {
-        $archiverProgram = $7zpathexe
-        $7zInstalled = $true 
-    }    
+	if ((Test-Path $7zpathexe) -eq $true) {
+		$archiverProgram = $7zpathexe
+		$7zInstalled = $true 
+	}
 }
 else {
     if (Test-Path "HKLM:\SOFTWARE\WinRAR") {
-        $winrarpath = Get-ItemProperty -Path HKLM:\SOFTWARE\WinRAR -Name exe64 
-        $winrarpath = $winrarpath.exe64
+		$winrarpath = Get-ItemProperty -Path HKLM:\SOFTWARE\WinRAR -Name exe64 
+		$winrarpath = $winrarpath.exe64
 
-        if ((Test-Path $winrarpath) -eq $true) {
-            $archiverProgram = $winrarpath
-        }
+		if ((Test-Path $winrarpath) -eq $true) {
+			$archiverProgram = $winrarpath
+		}
     }
     else {
 		Write-Host "Sorry, but it looks like you don't have a supported archiver.`n"
