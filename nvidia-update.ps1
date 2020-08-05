@@ -14,164 +14,164 @@ $Parms = @{
 
 # Getter functions
 function Get-GpuData {
-    $gpus = @(Get-WmiObject Win32_VideoController)
+	$gpus = @(Get-WmiObject Win32_VideoController)
 
-    foreach ($gpu in $gpus) {
-        $gpuName = $gpu.Name
+	foreach ($gpu in $gpus) {
+		$gpuName = $gpu.Name
 
-        if ($gpuName -match "^NVIDIA") {
-            $gpuName = $gpuName.Replace("NVIDIA", "").Trim()
-        
-            $gpuType = "Desktop"
+		if ($gpuName -match "^NVIDIA") {
+			$gpuName = $gpuName.Replace("NVIDIA", "").Trim()
 
-            if ($gpuName -match "(M|Q(X|\s+(LE|GTX|GTS|GS|GT|G))?$|GeForce Go)") {
-               $gpuType = "Notebook" 
-            }
+			$gpuType = "Desktop"
 
-            $driverVersion = $gpu.DriverVersion.SubString(7).Remove(1, 1).Insert(3, ".")
-        
-            $compatibleGpuFound = $true
-            break
-        }
-    }
+			if ($gpuName -match "(M|Q(X|\s+(LE|GTX|GTS|GS|GT|G))?$|GeForce Go)") {
+			   $gpuType = "Notebook" 
+			}
 
-    if (!$compatibleGpuFound) {
-        Write-Host -ForegroundColor Yellow "`nUnable to detect a compatible Nvidia device."
-        Write-Host "Press any key to exit..."
+			$driverVersion = $gpu.DriverVersion.SubString(7).Remove(1, 1).Insert(3, ".")
 
-        $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-        exit
-    }
+			$compatibleGpuFound = $true
+			break
+		}
+	}
 
-    return $gpuName, $gpuType, $driverVersion
+	if (!$compatibleGpuFound) {
+		Write-Host -ForegroundColor Yellow "`nUnable to detect a compatible Nvidia device."
+		Write-Host "Press any key to exit..."
+
+		$host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+		exit
+	}
+
+	return $gpuName, $gpuType, $driverVersion
 }
 
 function Get-GpuLookupData ([string] $typeId, [string] $parentId) {
-  # typeId - 2: product series; 3: product family (GPU); 4: operating system
+	# typeId - 2: product series; 3: product family (GPU); 4: operating system
 
-  $request = "http://www.nvidia.com/Download/API/lookupValueSearch.aspx?"
-  $request += "TypeID=$typeId&ParentID=$parentId"
+	$request = "http://www.nvidia.com/Download/API/lookupValueSearch.aspx?"
+	$request += "TypeID=$typeId&ParentID=$parentId"
 
-  $payload = Invoke-RestMethod $request -UseBasicParsing
+	$payload = Invoke-RestMethod $request -UseBasicParsing
 
-  return $payload.LookupValueSearch.LookupValues.LookupValue
+	return $payload.LookupValueSearch.LookupValues.LookupValue
 }
 
 function Get-DriverLookupParameters ([string] $gpuName, [string] $gpuType) {
-    # Determining product series ID
-    $seriesData = Get-GpuLookupData 2 1
+	# Determining product series ID
+	$seriesData = Get-GpuLookupData 2 1
 
-    foreach ($series in $seriesData) {
-        # Limit to desktop/notebook
-        if ($gpuType -eq "Notebook") {
-            if ($series.Name -notlike "*Notebook*") { continue }
-        } else {
-            if ($series.Name -like "*Notebook*") { continue }
-        }
+	foreach ($series in $seriesData) {
+		# Limit to desktop/notebook
+		if ($gpuType -eq "Notebook") {
+			if ($series.Name -notlike "*Notebook*") { continue }
+		} else {
+			if ($series.Name -like "*Notebook*") { continue }
+		}
 
-        $seriesId = $series.Value
+		$seriesId = $series.Value
 
-        # Determining product family (GPU) ID
-        $familyData = Get-GpuLookupData 3 $seriesId
+		# Determining product family (GPU) ID
+		$familyData = Get-GpuLookupData 3 $seriesId
 
-        foreach ($gpu in $familyData) {
-            $searchGpuName = $gpu.Name.Replace("NVIDIA", "").Trim()
+		foreach ($gpu in $familyData) {
+			$searchGpuName = $gpu.Name.Replace("NVIDIA", "").Trim()
 
-            if ($searchGpuName -eq $gpuName) {
-                $gpuId = $gpu.Value
-                break
-            }
-            elseif ($searchGpuName -like "*/*") {
-                if ((($searchGpuName -replace "(\/|nForce).*$","").Trim() -eq $gpuName) -or 
-                   (($searchGpuName -replace "(?:[^\s]+\/|(?:[^\s]+\s+){2}\/|.*?(nForce))", "" -replace "\s+", " ").Trim() -eq $gpuName)) {
-          
-                    $gpuId = $gpu.Value
-                    break
-                }
-            }
-        }
+			if ($searchGpuName -eq $gpuName) {
+				$gpuId = $gpu.Value
+				break
+			}
+			elseif ($searchGpuName -like "*/*") {
+				if ((($searchGpuName -replace "(\/|nForce).*$","").Trim() -eq $gpuName) -or 
+				   (($searchGpuName -replace "(?:[^\s]+\/|(?:[^\s]+\s+){2}\/|.*?(nForce))", "" -replace "\s+", " ").Trim() -eq $gpuName)) {
+		  
+					$gpuId = $gpu.Value
+					break
+				}
+			}
+		}
 
-        # Current product series ID correct, stop searching
-        if ($gpuId) { break }
-    }
+		# Current product series ID correct, stop searching
+		if ($gpuId) { break }
+	}
 
-    if (!$gpuId) {
-        Write-Host -ForegroundColor Yellow "`nUnable to determine GPU product family ID. This should not happen."
-        Write-Host "Press any key to exit..."
+	if (!$gpuId) {
+		Write-Host -ForegroundColor Yellow "`nUnable to determine GPU product family ID. This should not happen."
+		Write-Host "Press any key to exit..."
 
-        $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-        exit
-    }
+		$host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+		exit
+	}
 
-    # Determining operating system version and architecture
-    $osVersion = "$([Environment]::OSVersion.Version.Major).$([Environment]::OSVersion.Version.Minor)"
+	# Determining operating system version and architecture
+	$osVersion = "$([Environment]::OSVersion.Version.Major).$([Environment]::OSVersion.Version.Minor)"
 
-    $osArchitecture = 64
+	$osArchitecture = 64
 
-    if (([System.IntPtr]::Size -eq 4) -and !(Test-Path env:\PROCESSOR_ARCHITEW6432)) {
-        $osArchitecture = 32
-    }
+	if (([System.IntPtr]::Size -eq 4) -and !(Test-Path env:\PROCESSOR_ARCHITEW6432)) {
+		$osArchitecture = 32
+	}
 
-    # Determining operating system ID
-    $osData = Get-GpuLookupData 4 $seriesId
+	# Determining operating system ID
+	$osData = Get-GpuLookupData 4 $seriesId
 
-    foreach ($os in $osData) {
-        if (($os.Code -eq $osVersion) -and ($os.Name -match $osArchitecture)) {
-            $osID = $os.Value
-            break
-        }
-    }
+	foreach ($os in $osData) {
+		if (($os.Code -eq $osVersion) -and ($os.Name -match $osArchitecture)) {
+			$osID = $os.Value
+			break
+		}
+	}
 
-    if (!$osId) {
-        Write-Host -ForegroundColor Yellow "`nCould not find a driver supported by your operating system."
-        Write-Host "Press any key to exit..."
+	if (!$osId) {
+		Write-Host -ForegroundColor Yellow "`nCould not find a driver supported by your operating system."
+		Write-Host "Press any key to exit..."
 
-        $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-        exit
-    }
+		$host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+		exit
+	}
 
-    # Checking if using DCH driver
-    $dch = 0
+	# Checking if using DCH driver
+	$dch = 0
 
-    if ($osVersion -eq 10.0) {
-        if (Get-ItemProperty -Path HKLM:\SYSTEM\CurrentControlSet\Services\nvlddmkm -Name 'DCHUVen' -ErrorAction Ignore) {
-            $dch = 1
-        }
-    }
+	if ($osVersion -eq 10.0) {
+		if (Get-ItemProperty -Path HKLM:\SYSTEM\CurrentControlSet\Services\nvlddmkm -Name 'DCHUVen' -ErrorAction Ignore) {
+			$dch = 1
+		}
+	}
 
-    return $gpuId, $osId, $dch
+	return $gpuId, $osId, $dch
 }
 
 function Get-DownloadInfo ([string] $gpuId, [string] $osId, [string] $dch) {
-    $request = "https://gfwsl.geforce.com/services_toolkit/services/com/nvidia/services/AjaxDriverService.php?"
-    $request += "func=DriverManualLookup&pfid=$gpuId&osID=$osId&dch=$dch"
+	$request = "https://gfwsl.geforce.com/services_toolkit/services/com/nvidia/services/AjaxDriverService.php?"
+	$request += "func=DriverManualLookup&pfid=$gpuId&osID=$osId&dch=$dch"
 
-    $payload = Invoke-RestMethod $request -UseBasicParsing
+	$payload = Invoke-RestMethod $request -UseBasicParsing
 
-    if ($payload.Success -eq 1) {
-        return $payload.IDS[0].downloadInfo
-    }
-    else {
-        Write-Host -ForegroundColor Yellow "`nCould not find a driver for your GPU."
-        Write-Host "Press any key to exit..."
+	if ($payload.Success -eq 1) {
+		return $payload.IDS[0].downloadInfo
+	}
+	else {
+		Write-Host -ForegroundColor Yellow "`nCould not find a driver for your GPU."
+		Write-Host "Press any key to exit..."
 
-        $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-        exit
-    }
+		$host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+		exit
+	}
 }
 
 
 # Registering scheduled task if the $schedule parameter is set
 if ($schedule) {
-    $taskName = "nvidia-update $($Parms.Version)"
-    $description = "NVIDIA Driver Update"
-    $scheduleDay = "Sunday"
-    $scheduleTime = "12pm"
+	$taskName = "nvidia-update $($Parms.Version)"
+	$description = "NVIDIA Driver Update"
+	$scheduleDay = "Sunday"
+	$scheduleTime = "12pm"
 
-    $taskDirectory = "$env:USERPROFILE"
-    $thisFileName = $MyInvocation.MyCommand.Name
+	$taskDirectory = "$env:USERPROFILE"
+	$thisFileName = $MyInvocation.MyCommand.Name
 	$thisScriptPath = "$(Split-Path -parent $PSCommandPath)\$thisFileName"
-    $taskScriptPath = "$taskDirectory\$thisFileName"
+	$taskScriptPath = "$taskDirectory\$thisFileName"
 
 	$action = New-ScheduledTaskAction -Execute $taskScriptPath
 	$settings = New-ScheduledTaskSettingsSet -DontStopIfGoingOnBatteries -RunOnlyIfIdle -IdleDuration 00:10:00 -IdleWaitTimeout 02:00:00
@@ -182,7 +182,7 @@ if ($schedule) {
 		New-Item $taskDirectory -type directory 2>&1 | Out-Null
 		Copy-Item .\$thisFileName -Destination $taskDirectory 2>&1 | Out-Null
 	}
-	
+
 	# Registering task if it doesnt already exist or if it references a different script version
 	$existingTask = Get-ScheduledTask | Where-Object {$_.TaskName -like "nvidia-update*" }
 	
@@ -234,30 +234,30 @@ else {
         }
     }
     else {
-        Write-Host "Sorry, but it looks like you don't have a supported archiver.`n"
+		Write-Host "Sorry, but it looks like you don't have a supported archiver.`n"
 
 		$decision = $Host.UI.PromptForChoice("", "Would you like to install 7-Zip now?", ("&Yes", "&No"), 0)
 
 		if ($decision -eq 0) {
 			# Download and silently install 7-Zip
-            $7zip = "https://www.7-zip.org/a/7z1900-x64.exe"
-            $output = "$PSScriptRoot\7Zip.exe"
+			$7zip = "https://www.7-zip.org/a/7z1900-x64.exe"
+			$output = "$PSScriptRoot\7Zip.exe"
 
-            (New-Object System.Net.WebClient).DownloadFile($7zip, $output)
-            Start-Process "7Zip.exe" -Wait -ArgumentList "/S"
-        
-            # Delete the installer once it completes
-            Remove-Item "$PSScriptRoot\7Zip.exe"
+			(New-Object System.Net.WebClient).DownloadFile($7zip, $output)
+			Start-Process "7Zip.exe" -Wait -ArgumentList "/S"
 
-            # Writing a line to separate the next phase of the script
-            Write-Host
+			# Delete the installer once it completes
+			Remove-Item "$PSScriptRoot\7Zip.exe"
+
+			# Writing a line to separate the next phase of the script
+			Write-Host
 		}
 		else {
 			Write-Host -ForegroundColor Yellow "`nA supported archiver is required to use this script."
-            Write-Host "Press any key to exit..."
+			Write-Host "Press any key to exit..."
 
-            $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-            exit
+			$host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+			exit
 		}
     }
 }
@@ -281,11 +281,11 @@ Write-Host "`tLatest version`t`t$latestDriverVersion"
 
 # Comparing installed driver version to latest driver version
 if (!$clean -and ($latestDriverVersion -eq $driverVersion)) {
-    Write-Host -ForegroundColor Yellow "`nThe latest driver (version $driverVersion) is already installed."
-    Write-Host "Press any key to exit..."
-    
-    $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-    exit
+	Write-Host -ForegroundColor Yellow "`nThe latest driver (version $driverVersion) is already installed."
+	Write-Host "Press any key to exit..."
+
+	$host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+	exit
 }
 
 
@@ -316,11 +316,11 @@ if ($decision -eq 0) {
 	}
 }
 else {
-    Write-Host -ForegroundColor Yellow "`nDownload cancelled."
-    Write-Host "Press any key to exit..."
+	Write-Host -ForegroundColor Yellow "`nDownload cancelled."
+	Write-Host "Press any key to exit..."
 
-    $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-    exit
+	$host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+	exit
 }
 
 
@@ -338,17 +338,17 @@ if (Test-Path .\filesToExtract.txt) {
 }
 
 if ($7zInstalled) {
-    Start-Process -FilePath $archiverProgram -NoNewWindow -ArgumentList "x -bso0 -bsp1 -bse1 -aoa $dlFile $filesToExtract -o""$extractFolder""" -wait
+	Start-Process -FilePath $archiverProgram -NoNewWindow -ArgumentList "x -bso0 -bsp1 -bse1 -aoa $dlFile $filesToExtract -o""$extractFolder""" -wait
 }
 elseif ($archiverProgram -eq $winrarpath) {
-    Start-Process -FilePath $archiverProgram -NoNewWindow -ArgumentList 'x $dlFile $extractFolder -IBCK $filesToExtract' -wait
+	Start-Process -FilePath $archiverProgram -NoNewWindow -ArgumentList 'x $dlFile $extractFolder -IBCK $filesToExtract' -wait
 }
 else {
-    Write-Host -ForegroundColor Yellow "`nNo archive program detected. This should not happen."
-    Write-Host "Press any key to exit..."
+	Write-Host -ForegroundColor Yellow "`nNo archive program detected. This should not happen."
+	Write-Host "Press any key to exit..."
 
-    $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-    exit
+	$host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+	exit
 }
 
 
@@ -362,7 +362,7 @@ Write-Host -ForegroundColor Cyan "`nInstalling Nvidia driver now..."
 $installArgs = "-passive -noreboot -noeula -nofinish -s"
 
 if ($clean) {
-    $installArgs = $installArgs + " -clean"
+	$installArgs = $installArgs + " -clean"
 }
 
 Start-Process -FilePath "$extractFolder\setup.exe" -ArgumentList $installArgs -wait
