@@ -6,13 +6,13 @@ param (
 )
 
 $Parms = @{
-	Version = "1.1"
+	Version = "1.2"
 	Author = "ZenitH-AT"
 	Description = "Checks for a new version of the Nvidia driver, downloads and installs it."
 }
 
 
-# Getter functions
+# Functions
 function Get-GpuData {
 	$gpus = @(Get-WmiObject Win32_VideoController)
 
@@ -160,31 +160,51 @@ function Get-DownloadInfo ([string] $gpuId, [string] $osId, [string] $dch) {
 	}
 }
 
+function Compare-Files ([string] $filePathA, [string] $filePathB) {
+	if ((Test-Path $filePathA) -and (Test-Path $filePathB)) {
+		if ((Get-FileHash $filePathA).hash -eq (Get-FileHash $filePathB).hash) {
+			return $true
+		}
+	}
+}
+
 
 # Registering scheduled task if the $schedule parameter is set
-if ($schedule) {
+if (!$schedule) {
 	$taskName = "nvidia-update $($Parms.Version)"
 	$description = "NVIDIA Driver Update"
 	$scheduleDay = "Sunday"
 	$scheduleTime = "12pm"
 
-	$taskDirectory = "$env:USERPROFILE"
 	$thisFileName = $MyInvocation.MyCommand.Name
-	$thisScriptPath = "$(Split-Path -parent $PSCommandPath)\$thisFileName"
+	$taskDirectory = "$env:USERPROFILE\nvidia-update"
 	$taskScriptPath = "$taskDirectory\$thisFileName"
 
 	$action = New-ScheduledTaskAction -Execute $taskScriptPath
 	$settings = New-ScheduledTaskSettingsSet -DontStopIfGoingOnBatteries -RunOnlyIfIdle -IdleDuration 00:10:00 -IdleWaitTimeout 02:00:00
 	$trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek $scheduleDay -At $scheduleTime
 
-	# Copying script to user profile folder if it isn't present
-	if ((Get-FileHash $thisScriptPath).hash -ne (Get-FileHash $taskScriptPath).hash) {
+	# Copying script and optional driver components file to user profile folder if they aren't present or a different version
+	if (!(Test-Path $taskDirectory)) {
 		New-Item $taskDirectory -type directory 2>&1 | Out-Null
-		Copy-Item .\$thisFileName -Destination $taskDirectory 2>&1 | Out-Null
+	}
+	
+	if (!(Compare-Files ".\$thisFileName" $taskScriptPath)) {
+		Copy-Item ".\$thisFileName" -Destination $taskDirectory 2>&1 | Out-Null
+	}
+
+	if (Test-Path ".\optional-components.cfg") {
+		if (!(Compare-Files ".\optional-components.cfg" "$taskDirectory\optional-components.cfg")) {
+			Copy-Item ".\optional-components.cfg" -Destination $taskDirectory 2>&1 | Out-Null
+		}
+	}
+	elseif (Test-Path "$taskDirectory\optional-components.cfg") {
+		# Deleting optional-components.cfg from task directory because not present in running directory
+		Remove-Item "$taskDirectory\optional-components.cfg"
 	}
 
 	# Registering task if it doesnt already exist or if it references a different script version
-	$existingTask = Get-ScheduledTask | Where-Object {$_.TaskName -like "nvidia-update*" }
+	$existingTask = Get-ScheduledTask | Where-Object { $_.TaskName -like "nvidia-update*" }
 	
 	if ($existingTask.TaskName -notlike "*$($Parms.Version)") {
 		if ($existingTask) {
@@ -331,8 +351,8 @@ Write-Host "`nDownload finished, extracting driver files now..."
 
 $filesToExtract = "Display.Driver NVI2 EULA.txt ListDevices.txt setup.cfg setup.exe"
 
-if (Test-Path .\filesToExtract.txt) {
-	Get-Content .\filesToExtract.txt | Where-Object {$_ -match "^[^#]+.*?"} | ForEach-Object {
+if (Test-Path ".\optional-components.cfg") {
+	Get-Content ".\optional-components.cfg" | Where-Object {$_ -match "^[^\/]+"} | ForEach-Object {
 		$filesToExtract += " " + $_
 	}
 }
