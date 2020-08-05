@@ -170,7 +170,7 @@ function Compare-Files ([string] $filePathA, [string] $filePathB) {
 
 
 # Registering scheduled task if the $schedule parameter is set
-if (!$schedule) {
+if ($schedule) {
 	$taskName = "nvidia-update $($Parms.Version)"
 	$description = "NVIDIA Driver Update"
 	$scheduleDay = "Sunday"
