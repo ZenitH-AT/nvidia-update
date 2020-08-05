@@ -4,7 +4,7 @@ Checks for a new version of the Nvidia Driver, downloads and installs it.
 
 ## Usage
 
-* Download `nvidia-update.ps1` and `optional-driver-components.txt` (optional)
+* Download `nvidia-update.ps1` and `optional-components.txt` (optional)
 * Right click and select `Run with PowerShell`
 * If the script finds a newer version of the nvidia driver online it will download and install it.
 
@@ -52,7 +52,7 @@ Q. How do we check for the latest driver version from Nvidia website ?
 ## ZenitH-AT's changes
 
 * Getting the download link now uses Nvidia's AjaxDriverService. **DCH drivers are now supported** and there is no risk of the script not working if Nvidia changes the download URL format. RP packages are not supported (yet).
-* The user can now choose what optional driver components to include in the installation using the optional-driver-components.txt file.
+* The user can now choose what optional driver components to include in the installation using the optional-components.txt file.
 * The GPU's product family ID (pfid) is now checked and passed to AjaxDriverService (e.g. RTX 2060 ID is 888), as older GPUs may use different drivers.
 * Simplified the archiver program check.
 * Simplified the OS version and architecture check and driver version comparison.
