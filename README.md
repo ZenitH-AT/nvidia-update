@@ -1,12 +1,20 @@
-<img src="./logo.svg" width="128" align="right">
-
-<br/>
-<br/>
-<br/>
-
-# nvidia-update
+# nvidia-update (ZenitH-AT fork)
 
 Checks for a new version of the Nvidia Driver, downloads and installs it.
+
+## ZenitH-AT's changes
+
+* Getting the download link now uses Nvidia's AjaxDriverService. **DCH drivers are now supported** and there is no risk of the script not working if Nvidia changes the download URL format. RP packages are not supported (yet).
+* The user can easy choose what optional driver components to install using the .txt file.
+* The GPU's product family ID (pfid) is now checked and passed to AjaxDriverService (e.g. RTX 2060 ID is 888), as older GPUs may use different drivers.
+* Simplified the archiver program check.
+* Simplified the OS version and architecture check and driver version comparison.
+* Simplified and improved the scheduled task creation.
+* The script now checks for an internet connection before proceeding.
+* Refactored and reorganised a lot of the code.
+
+## ZenitH-AT's planned changes
+* 7-Zip download should get the URL of the latest version instead of using a predefined URL.
 
 ## Usage
 
@@ -17,6 +25,7 @@ Checks for a new version of the Nvidia Driver, downloads and installs it.
 ### Optional parameters
 
 * `-clean` - deletes the old driver and installs the newest one
+* `-schedule` - creates a scheduled task after the driver has been installed, to periodically check for new drivers
 * `-folder <path_to_folder>` - the directory where the script will download and extract the new driver
 
 ### How to pass the optional parameters
@@ -32,7 +41,7 @@ You can use `SchTasks` to run the script automatically with:
 ```ps
 $path = "C:"
 New-Item -ItemType Directory -Force -Path $path | Out-Null
-Invoke-WebRequest -Uri "https://github.com/lord-carlos/nvidia-update/raw/master/nvidia.ps1" -OutFile "$path\nvidia.ps1" -UseBasicParsing
+Invoke-WebRequest -Uri "https://github.com/ZenitH-AT/nvidia-update/raw/master/nvidia.ps1" -OutFile "$path\nvidia.ps1" -UseBasicParsing
 SchTasks /Create /SC DAILY /TN "Nvidia-Updater" /TR "powershell -NoProfile -ExecutionPolicy Bypass -File $path\nvidia.ps1" /ST 10:00
 schtasks /run /tn "Nvidia-Updater"
 ```
