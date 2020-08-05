@@ -1,6 +1,6 @@
 # nvidia-update (ZenitH-AT fork)
 
-Checks for a new version of the Nvidia Driver, downloads and installs it.
+Checks for a new version of the Nvidia driver, downloads and installs it.
 
 ## Usage
 
