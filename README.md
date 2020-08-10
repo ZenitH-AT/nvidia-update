@@ -61,5 +61,5 @@ Q. How do we check for the latest driver version from Nvidia website ?
 * Refactored and reorganised a lot of the code.
 
 ## ZenitH-AT's planned changes
-* Series data should not be restricted to GeForce cards (at the moment the script cannot update TITAN GPUs, Quadro GPUs, etc.)
+* Series data should not be restricted to GeForce cards (at the moment the script cannot update TITAN GPUs, Quadro GPUs, etc.).
 * 7-Zip download should get the URL of the latest version instead of using a predefined URL.
