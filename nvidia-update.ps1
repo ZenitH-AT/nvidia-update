@@ -20,7 +20,17 @@ function Get-GpuData {
 		$gpuName = $gpu.Name
 
 		if ($gpuName -match "^NVIDIA") {
-			$gpuName = $gpuName.Replace("NVIDIA", "").Trim()
+            # Formatting GPU name, accounting for card variants (e.g. 1060 6GB)
+            if ($gpuName -match "(?<=NVIDIA )(.*(?= [0-9]+GB)|.*)") {
+                $gpuName = $Matches[0].Trim()
+            }
+            else {
+                Write-Host -ForegroundColor Yellow "`nUnrecognised GPU name $gpuName. This should not happen."
+		        Write-Host "Press any key to exit..."
+
+		        $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+		        exit
+            }
 
 			$gpuType = "Desktop"
 
@@ -336,7 +346,7 @@ if ($decision -eq 0) {
 	}
 }
 else {
-	Write-Host -ForegroundColor Yellow "`nDownload cancelled."
+	Write-Host -ForegroundColor Yellow "Download cancelled."
 	Write-Host "Press any key to exit..."
 
 	$host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
@@ -389,8 +399,14 @@ Start-Process -FilePath "$extractFolder\setup.exe" -ArgumentList $installArgs -w
 
 
 # Cleaning up downloaded files
-Write-Host "`nDeleting downloaded files..."
-Remove-Item $tempFolder -Recurse -Force
+Write-Host "`nDeleting temporary files..."
+
+try {
+	Remove-Item $tempFolder -Recurse -Force
+}
+catch {
+	Write-Host -ForegroundColor Gray "`nSome temporary files located at $tempFolder could not be deleted, you may want to remove them manually later."
+}
 
 
 # Driver installed, offering a reboot
