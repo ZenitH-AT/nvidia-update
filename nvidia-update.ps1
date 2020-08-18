@@ -395,7 +395,21 @@ if ($clean) {
 	$installArgs = $installArgs + " -clean"
 }
 
-Start-Process -FilePath "$extractFolder\setup.exe" -ArgumentList $installArgs -wait
+do {
+    try {
+        $uacAccepted = $true;
+
+        Start-Process -FilePath "$extractFolder\setup.exe" -ArgumentList $installArgs -wait
+    }
+    catch {
+        $uacAccepted = $false;
+    
+        Write-Host -ForegroundColor Yellow "`nUAC prompt declined. Please accept the prompt."
+        Write-Host "Press any key to try again..."
+
+        $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+    }
+} while (!$uacAccepted)
 
 
 # Cleaning up downloaded files
