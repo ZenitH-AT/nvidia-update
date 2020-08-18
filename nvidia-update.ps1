@@ -387,8 +387,6 @@ else {
 
 
 # Installing driver
-Write-Host -ForegroundColor Cyan "`nInstalling Nvidia driver now..."
-
 $installArgs = "-passive -noreboot -noeula -nofinish -s"
 
 if ($clean) {
@@ -398,6 +396,8 @@ if ($clean) {
 do {
     try {
         $uacAccepted = $true;
+
+        Write-Host -ForegroundColor Cyan "`nInstalling Nvidia driver now..."
 
         Start-Process -FilePath "$extractFolder\setup.exe" -ArgumentList $installArgs -wait
     }
