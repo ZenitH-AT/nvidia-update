@@ -38,7 +38,7 @@ schtasks /run /tn "Nvidia-Updater"
 
 ## FAQ
 
-Q. How do we check for the latest driver version from Nvidia website ?
+Q. How do we check for the latest driver version from Nvidia website?
 
 > We use the NVIDIA [AjaxDriverService](https://gfwsl.geforce.com/services_toolkit/services/com/nvidia/services/AjaxDriverService.php).
 >
@@ -48,6 +48,16 @@ Q. How do we check for the latest driver version from Nvidia website ?
 > * **pfid**: Product Family (GPU) ID (e.g. _GeForce GTX 2080 Ti_: 877)
 > * **osID**: Operating System ID (e.g. _Windows 10 64-bit_: 57)
 > * **dch**: Windows Driver Type (_Standard_: 0, _DCH_: 1)
+
+Q. The "NVIDIA Control Panel" is missing after installing the DCH driver! How can I fix this?
+
+> We use the NVIDIA [AjaxDriverService](https://gfwsl.geforce.com/services_toolkit/services/com/nvidia/services/AjaxDriverService.php).
+> This is a very frustrating issue that a minority of users face when using this script for the first time.
+> 
+> Some solutions include:
+> 
+> * Restarting your computer (sometimes two restarts are required)
+> * Running the script again with the `-clean` parameter (this seems to fix the issue for most but you will need to reconfigure any control panel and/or driver settings)
 
 ## ZenitH-AT's changes
 
