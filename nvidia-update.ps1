@@ -321,7 +321,7 @@ if (!$clean -and ($latestDriverVersion -eq $driverVersion)) {
 
 # Creating a temporary folder and downloading the installer
 $tempFolder = "$folder\NVIDIA"
-$dlFile = "$tempFolder\$latestVersion.exe"
+$dlFile = "$tempFolder\$latestDriverVersion.exe"
 
 Write-Host "`nReady to download the latest version to $dlFile...`n"
 
