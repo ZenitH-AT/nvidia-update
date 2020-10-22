@@ -14,7 +14,7 @@ $Parms = @{
 
 # Functions
 function Get-GpuData {
-	$gpus = @(Get-WmiObject Win32_VideoController)
+	$gpus = @(Get-CimInstance Win32_VideoController | Select-Object Name, DriverVersion)
 
 	foreach ($gpu in $gpus) {
 		$gpuName = $gpu.Name
