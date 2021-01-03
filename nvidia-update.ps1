@@ -13,6 +13,14 @@ $Parms = @{
 
 
 # Functions
+function Write-ExitError ([string] $errorMessage) {
+	Write-Host -ForegroundColor Yellow $errorMessage
+	Write-Host "Press any key to exit..."
+
+	$host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+	exit
+}
+
 function Get-GpuData {
 	$gpus = @(Get-CimInstance Win32_VideoController | Select-Object Name, DriverVersion)
 
@@ -25,11 +33,7 @@ function Get-GpuData {
                 $gpuName = $Matches[0].Trim()
             }
             else {
-                Write-Host -ForegroundColor Yellow "`nUnrecognised GPU name $gpuName. This should not happen."
-		        Write-Host "Press any key to exit..."
-
-		        $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-		        exit
+                Write-ExitError "`nUnrecognised GPU name $gpuName. This should not happen."
             }
 
 			$gpuType = "Desktop"
@@ -46,11 +50,7 @@ function Get-GpuData {
 	}
 
 	if (!$compatibleGpuFound) {
-		Write-Host -ForegroundColor Yellow "`nUnable to detect a compatible Nvidia device."
-		Write-Host "Press any key to exit..."
-
-		$host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-		exit
+		Write-ExitError "`nUnable to detect a compatible Nvidia device."
 	}
 
 	return $gpuName, $gpuType, $driverVersion
@@ -106,11 +106,7 @@ function Get-DriverLookupParameters ([string] $gpuName, [string] $gpuType) {
 	}
 
 	if (!$gpuId) {
-		Write-Host -ForegroundColor Yellow "`nUnable to determine GPU product family ID. This should not happen."
-		Write-Host "Press any key to exit..."
-
-		$host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-		exit
+		Write-ExitError "`nUnable to determine GPU product family ID. This should not happen."
 	}
 
 	# Determining operating system version and architecture
@@ -133,11 +129,7 @@ function Get-DriverLookupParameters ([string] $gpuName, [string] $gpuType) {
 	}
 
 	if (!$osId) {
-		Write-Host -ForegroundColor Yellow "`nCould not find a driver supported by your operating system."
-		Write-Host "Press any key to exit..."
-
-		$host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-		exit
+		Write-ExitError "`nCould not find a driver supported by your operating system."
 	}
 
 	# Checking if using DCH driver
@@ -162,11 +154,7 @@ function Get-DownloadInfo ([string] $gpuId, [string] $osId, [string] $dch) {
 		return $payload.IDS[0].downloadInfo
 	}
 	else {
-		Write-Host -ForegroundColor Yellow "`nCould not find a driver for your GPU."
-		Write-Host "Press any key to exit..."
-
-		$host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-		exit
+		Write-ExitError "`nCould not find a driver for your GPU."
 	}
 }
 
@@ -233,11 +221,7 @@ if ($schedule) {
 
 # Checking internet connection
 if (!(Get-NetRoute | ? DestinationPrefix -eq "0.0.0.0/0" | Get-NetIPInterface | where ConnectionState -eq "Connected")) {
-	Write-Host -ForegroundColor Yellow "No internet connection. After resolving connectivity issues, please try running this script again."
-	Write-Host "Press any key to exit..."
-
-	$host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-	exit
+	Write-ExitError "No internet connection. After resolving connectivity issues, please try running this script again."
 }
 
 
@@ -283,11 +267,7 @@ else {
 			Write-Host
 		}
 		else {
-			Write-Host -ForegroundColor Yellow "`nA supported archiver is required to use this script."
-			Write-Host "Press any key to exit..."
-
-			$host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-			exit
+			Write-ExitError "`nA supported archiver is required to use this script."
 		}
     }
 }
@@ -311,11 +291,7 @@ Write-Host "`tLatest version`t`t$latestDriverVersion"
 
 # Comparing installed driver version to latest driver version
 if (!$clean -and ($latestDriverVersion -eq $driverVersion)) {
-	Write-Host -ForegroundColor Yellow "`nThe latest driver (version $driverVersion) is already installed."
-	Write-Host "Press any key to exit..."
-
-	$host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-	exit
+	Write-ExitError "`nThe latest driver (version $driverVersion) is already installed."
 }
 
 
@@ -338,19 +314,11 @@ if ($decision -eq 0) {
 		Start-BitsTransfer -Source $downloadInfo.DownloadURL -Destination $dlFile
 	}
 	catch {
-		Write-Host -ForegroundColor Yellow "`nDownload failed. Please try running this script again."
-		Write-Host "Press any key to exit..."
-
-		$host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-		exit
+		Write-ExitError "`nDownload failed. Please try running this script again."
 	}
 }
 else {
-	Write-Host -ForegroundColor Yellow "Download cancelled."
-	Write-Host "Press any key to exit..."
-
-	$host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-	exit
+	Write-ExitError "Download cancelled."
 }
 
 
@@ -374,11 +342,7 @@ elseif ($archiverProgram -eq $winrarpath) {
 	Start-Process -FilePath $archiverProgram -NoNewWindow -ArgumentList "x $dlFile $extractFolder -IBCK $filesToExtract" -Wait
 }
 else {
-	Write-Host -ForegroundColor Yellow "`nNo archive program detected. This should not happen."
-	Write-Host "Press any key to exit..."
-
-	$host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-	exit
+	Write-ExitError "`nNo archive program detected. This should not happen."
 }
 
 
