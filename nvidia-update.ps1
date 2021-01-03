@@ -144,7 +144,7 @@ function Get-DriverLookupParameters ([string] $gpuName, [string] $gpuType) {
 	$dch = 0
 
 	if ($osVersion -eq 10.0) {
-		if (Get-ItemProperty -Path HKLM:\SYSTEM\CurrentControlSet\Services\nvlddmkm -Name 'DCHUVen' -ErrorAction Ignore) {
+		if (Get-ItemProperty -Path HKLM:\SYSTEM\CurrentControlSet\Services\nvlddmkm -Name "DCHUVen" -ErrorAction Ignore) {
 			$dch = 1
 		}
 	}
@@ -232,7 +232,7 @@ if ($schedule) {
 
 
 # Checking internet connection
-if (!(Get-NetRoute | ? DestinationPrefix -eq '0.0.0.0/0' | Get-NetIPInterface | where ConnectionState -eq 'Connected')) {
+if (!(Get-NetRoute | ? DestinationPrefix -eq "0.0.0.0/0" | Get-NetIPInterface | where ConnectionState -eq "Connected")) {
 	Write-Host -ForegroundColor Yellow "No internet connection. After resolving connectivity issues, please try running this script again."
 	Write-Host "Press any key to exit..."
 
@@ -368,10 +368,10 @@ if (Test-Path ".\optional-components.cfg") {
 }
 
 if ($7zInstalled) {
-	Start-Process -FilePath $archiverProgram -NoNewWindow -ArgumentList "x -bso0 -bsp1 -bse1 -aoa $dlFile $filesToExtract -o""$extractFolder""" -wait
+	Start-Process -FilePath $archiverProgram -NoNewWindow -ArgumentList "x -bso0 -bsp1 -bse1 -aoa $dlFile $filesToExtract -o""$extractFolder""" -Wait
 }
 elseif ($archiverProgram -eq $winrarpath) {
-	Start-Process -FilePath $archiverProgram -NoNewWindow -ArgumentList 'x $dlFile $extractFolder -IBCK $filesToExtract' -wait
+	Start-Process -FilePath $archiverProgram -NoNewWindow -ArgumentList "x $dlFile $extractFolder -IBCK $filesToExtract" -Wait
 }
 else {
 	Write-Host -ForegroundColor Yellow "`nNo archive program detected. This should not happen."
@@ -383,7 +383,7 @@ else {
 
 
 # Removing unnecessary dependencies from setup.cfg
-(Get-Content "$extractFolder\setup.cfg") | Where-Object { $_ -notmatch 'name="\${{(EulaHtmlFile|FunctionalConsentFile|PrivacyPolicyFile)}}' } | Set-Content "$extractFolder\setup.cfg" -Encoding UTF8 -Force
+Get-Content "$extractFolder\setup.cfg" | Where-Object { $_ -notmatch 'name="\${{(EulaHtmlFile|FunctionalConsentFile|PrivacyPolicyFile)}}' } | Set-Content "$extractFolder\setup.cfg" -Encoding UTF8 -Force
 
 
 # Installing driver
@@ -399,7 +399,7 @@ do {
 
         Write-Host -ForegroundColor Cyan "`nInstalling Nvidia driver now..."
 
-        Start-Process -FilePath "$extractFolder\setup.exe" -ArgumentList $installArgs -wait
+        Start-Process -FilePath "$extractFolder\setup.exe" -ArgumentList $installArgs -Wait
     }
     catch {
         $uacAccepted = $false;
