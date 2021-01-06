@@ -8,7 +8,7 @@ param (
 $Parms = @{
 	Version 	= "1.3"
 	Author 		= "ZenitH-AT"
-	Description 	= "Checks for a new version of the Nvidia driver, downloads and installs it."
+	Description = "Checks for a new version of the Nvidia driver, downloads and installs it."
 }
 
 
@@ -395,7 +395,7 @@ else {
 
 # Removing unnecessary dependencies from setup.cfg
 try {
-	Set-Content -Path "$extractFolder\setup.cfg" -Value (Get-Content -Path "$extractFolder\setup.cfg" | Select-String -Pattern 'name="\${{(EulaHtmlFile|FunctionalConsentFile|PrivacyPolicyFile)}}' -notmatch)}
+	Set-Content -Path "$extractFolder\setup.cfg" -Value (Get-Content -Path "$extractFolder\setup.cfg" | Select-String -Pattern 'name="\${{(EulaHtmlFile|FunctionalConsentFile|PrivacyPolicyFile)}}' -notmatch)
 }
 catch {
 	Write-ExitError "`nUnable to remove unnecessary dependencies from setup.cfg because it is being used by another process.`nPlease close any conflicting program and try again." -Remove-Temp $tempFolder
