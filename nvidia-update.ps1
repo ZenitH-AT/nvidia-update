@@ -1,20 +1,46 @@
 # Script options and information
 param (
-	[switch] $clean = $false, # Will delete old drivers and install the new ones
-	[switch] $schedule = $false, # Creates a scheduled task to run to check for driver updates
-	[string] $folder = "$env:TEMP" # Downloads and extracts the driver here
+	[switch] $Clean		= $false, # Will delete old drivers and install the new ones
+	[switch] $Schedule 	= $false, # Creates a scheduled task to run to check for driver updates
+	[string] $Folder 	= "$env:TEMP" # Downloads and extracts the driver here
 )
 
 $Parms = @{
-	Version = "1.2"
-	Author = "ZenitH-AT"
-	Description = "Checks for a new version of the Nvidia driver, downloads and installs it."
+	Version 	= "1.3"
+	Author 		= "ZenitH-AT"
+	Description 	= "Checks for a new version of the Nvidia driver, downloads and installs it."
 }
 
 
 # Functions
-function Write-ExitError ([string] $errorMessage) {
-	Write-Host -ForegroundColor Yellow $errorMessage
+function Remove-Temp {
+	param (
+		$TempFolder
+	)
+
+	try {
+		Remove-Item $TempFolder -Recurse -Force
+	}
+	catch {
+		Write-Host -ForegroundColor Gray "`nSome files located at $TempFolder could not be deleted, you may want to remove them manually later."
+	}
+}
+
+function Write-ExitError {
+	param (
+		[string] $ErrorMessage,
+		[switch] $RemoveTemp,
+		[string] $TempFolder
+	)
+
+	Write-Host -ForegroundColor Yellow $ErrorMessage
+
+	if ($RemoveTemp) {
+		Write-Host "Removing temporary files..."
+
+		Remove-Temp $TempFolder
+	}
+
 	Write-Host "Press any key to exit..."
 
 	$host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
@@ -56,24 +82,34 @@ function Get-GpuData {
 	return $gpuName, $gpuType, $driverVersion
 }
 
-function Get-GpuLookupData ([string] $typeId, [string] $parentId) {
-	# typeId - 2: product series; 3: product family (GPU); 4: operating system
+function Get-GpuLookupData {
+	param (
+		[string] $TypeId,
+		[string] $ParentId
+	)
+
+	# TypeId - 2: product series; 3: product family (GPU); 4: operating system
 
 	$request = "http://www.nvidia.com/Download/API/lookupValueSearch.aspx?"
-	$request += "TypeID=$typeId&ParentID=$parentId"
+	$request += "TypeID=$TypeId&ParentID=$ParentId"
 
 	$payload = Invoke-RestMethod $request -UseBasicParsing
 
 	return $payload.LookupValueSearch.LookupValues.LookupValue
 }
 
-function Get-DriverLookupParameters ([string] $gpuName, [string] $gpuType) {
+function Get-DriverLookupParameters {
+	param (
+		[string] $GpuName,
+		[string] $GpuType
+	)
+
 	# Determining product series ID
 	$seriesData = Get-GpuLookupData 2 1
 
 	foreach ($series in $seriesData) {
 		# Limit to desktop/notebook
-		if ($gpuType -eq "Notebook") {
+		if ($GpuType -eq "Notebook") {
 			if ($series.Name -notlike "*Notebook*") { continue }
 		} else {
 			if ($series.Name -like "*Notebook*") { continue }
@@ -87,14 +123,14 @@ function Get-DriverLookupParameters ([string] $gpuName, [string] $gpuType) {
 		foreach ($gpu in $familyData) {
 			$searchGpuName = $gpu.Name.Replace("NVIDIA", "").Trim()
 
-			if ($searchGpuName -eq $gpuName) {
+			if ($searchGpuName -eq $GpuName) {
 				$gpuId = $gpu.Value
 				break
 			}
 			elseif ($searchGpuName -like "*/*") {
-				if ((($searchGpuName -replace "(\/|nForce).*$","").Trim() -eq $gpuName) -or 
-				   (($searchGpuName -replace "(?:[^\s]+\/|(?:[^\s]+\s+){2}\/|.*?(nForce))", "" -replace "\s+", " ").Trim() -eq $gpuName)) {
-		  
+				if ((($searchGpuName -replace "(\/|nForce).*$","").Trim() -eq $GpuName) -or 
+				   (($searchGpuName -replace "(?:[^\s]+\/|(?:[^\s]+\s+){2}\/|.*?(nForce))", "" -replace "\s+", " ").Trim() -eq $GpuName)) {
+
 					$gpuId = $gpu.Value
 					break
 				}
@@ -144,9 +180,15 @@ function Get-DriverLookupParameters ([string] $gpuName, [string] $gpuType) {
 	return $gpuId, $osId, $dch
 }
 
-function Get-DownloadInfo ([string] $gpuId, [string] $osId, [string] $dch) {
+function Get-DownloadInfo {
+	param (
+		[string] $GpuId,
+		[string] $OsId,
+		[string] $Dch
+	)
+
 	$request = "https://gfwsl.geforce.com/services_toolkit/services/com/nvidia/services/AjaxDriverService.php?"
-	$request += "func=DriverManualLookup&pfid=$gpuId&osID=$osId&dch=$dch"
+	$request += "func=DriverManualLookup&pfid=$GpuId&osID=$OsId&dch=$Dch"
 
 	$payload = Invoke-RestMethod $request -UseBasicParsing
 
@@ -158,17 +200,22 @@ function Get-DownloadInfo ([string] $gpuId, [string] $osId, [string] $dch) {
 	}
 }
 
-function Compare-Files ([string] $filePathA, [string] $filePathB) {
-	if ((Test-Path $filePathA) -and (Test-Path $filePathB)) {
-		if ((Get-FileHash $filePathA).hash -eq (Get-FileHash $filePathB).hash) {
+function Compare-Files {
+	param (
+		[string] $FilePathA,
+		[string] $FilePathB
+	)
+
+	if ((Test-Path $FilePathA) -and (Test-Path $FilePathB)) {
+		if ((Get-FileHash $FilePathA).hash -eq (Get-FileHash $FilePathB).hash) {
 			return $true
 		}
 	}
 }
 
 
-# Registering scheduled task if the $schedule parameter is set
-if ($schedule) {
+# Registering scheduled task if the $Schedule parameter is set
+if ($Schedule) {
 	$taskName = "nvidia-update $($Parms.Version)"
 	$description = "NVIDIA Driver Update"
 	$scheduleDay = "Sunday"
@@ -290,13 +337,13 @@ Write-Host "`tLatest version`t`t$latestDriverVersion"
 
 
 # Comparing installed driver version to latest driver version
-if (!$clean -and ($latestDriverVersion -eq $driverVersion)) {
+if (!$Clean -and ($latestDriverVersion -eq $driverVersion)) {
 	Write-ExitError "`nThe latest driver (version $driverVersion) is already installed."
 }
 
 
 # Creating a temporary folder and downloading the installer
-$tempFolder = "$folder\NVIDIA"
+$tempFolder = "$Folder\NVIDIA"
 $dlFile = "$tempFolder\$latestDriverVersion.exe"
 
 Write-Host "`nReady to download the latest version to $dlFile...`n"
@@ -314,11 +361,11 @@ if ($decision -eq 0) {
 		Start-BitsTransfer -Source $downloadInfo.DownloadURL -Destination $dlFile
 	}
 	catch {
-		Write-ExitError "`nDownload failed. Please try running this script again."
+		Write-ExitError "`nDownload failed. Please try running this script again." -Remove-Temp $tempFolder
 	}
 }
 else {
-	Write-ExitError "Download cancelled."
+	Write-ExitError "Download cancelled." -Remove-Temp $tempFolder
 }
 
 
@@ -342,12 +389,17 @@ elseif ($archiverProgram -eq $winrarpath) {
 	Start-Process -FilePath $archiverProgram -NoNewWindow -ArgumentList "x $dlFile $extractFolder -IBCK $filesToExtract" -Wait
 }
 else {
-	Write-ExitError "`nNo archive program detected. This should not happen."
+	Write-ExitError "`nNo archive program detected. This should not happen." -Remove-Temp $tempFolder
 }
 
 
 # Removing unnecessary dependencies from setup.cfg
-Get-Content "$extractFolder\setup.cfg" | Where-Object { $_ -notmatch 'name="\${{(EulaHtmlFile|FunctionalConsentFile|PrivacyPolicyFile)}}' } | Set-Content "$extractFolder\setup.cfg" -Encoding UTF8 -Force
+try {
+	Set-Content -Path "$extractFolder\setup.cfg" -Value (Get-Content -Path "$extractFolder\setup.cfg" | Select-String -Pattern 'name="\${{(EulaHtmlFile|FunctionalConsentFile|PrivacyPolicyFile)}}' -notmatch)}
+}
+catch {
+	Write-ExitError "`nUnable to remove unnecessary dependencies from setup.cfg because it is being used by another process.`nPlease close any conflicting program and try again." -Remove-Temp $tempFolder
+}
 
 
 # Installing driver
@@ -376,15 +428,10 @@ do {
 } while (!$uacAccepted)
 
 
-# Cleaning up downloaded files
-Write-Host "`nDeleting temporary files..."
+# Removing temporary (downloaded) files
+Write-Host "`nRemoving temporary files..."
 
-try {
-	Remove-Item $tempFolder -Recurse -Force
-}
-catch {
-	Write-Host -ForegroundColor Gray "`nSome temporary files located at $tempFolder could not be deleted, you may want to remove them manually later."
-}
+Remove-Temp $tempFolder
 
 
 # Driver installed, offering a reboot
