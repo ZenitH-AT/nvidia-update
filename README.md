@@ -1,6 +1,6 @@
 # nvidia-update (ZenitH-AT fork)
 
-Checks for a new version of the Nvidia driver, downloads and installs it.
+Checks for a new version of the Nvidia Driver, downloads and installs it.
 
 ## Usage
 
@@ -10,15 +10,15 @@ Checks for a new version of the Nvidia driver, downloads and installs it.
 
 ### Optional parameters
 
-* `-clean` - deletes the old driver and installs the newest one
-* `-schedule` - creates a scheduled task after the driver has been installed, to periodically check for new drivers
-* `-folder <path_to_folder>` - the directory where the script will download and extract the new driver
+* `-Clean` - deletes the old driver and installs the newest one
+* `-Schedule` - creates a scheduled task after the driver has been installed, to periodically check for new drivers
+* `-Folder <path>` - the directory where the script will download and extract the new driver
 
-### How to pass the optional parameters
+### How to pass optional parameters
 
 * While holding `shift` press `right click` in the folder with the script
 * Select `Open PowerShell window here`
-* Enter `.\nvidia-update.ps1 <parameters>` (ex: `.\nvidia-update.ps1 -clean -folder C:\NVIDIA`)
+* Enter `.\nvidia-update.ps1 <parameters>` (ex: `.\nvidia-update.ps1 -Clean -Folder C:\NVIDIA`)
 
 ## Running the script regularly and automatically
 
@@ -38,7 +38,7 @@ schtasks /run /tn "Nvidia-Updater"
 
 ## FAQ
 
-Q. How do we check for the latest driver version from Nvidia website?
+Q. How do we check for the latest driver version from Nvidia website ?
 
 > We use the NVIDIA [AjaxDriverService](https://gfwsl.geforce.com/services_toolkit/services/com/nvidia/services/AjaxDriverService.php).
 >
@@ -48,16 +48,6 @@ Q. How do we check for the latest driver version from Nvidia website?
 > * **pfid**: Product Family (GPU) ID (e.g. _GeForce GTX 2080 Ti_: 877)
 > * **osID**: Operating System ID (e.g. _Windows 10 64-bit_: 57)
 > * **dch**: Windows Driver Type (_Standard_: 0, _DCH_: 1)
-
-Q. The "NVIDIA Control Panel" is missing after installing the DCH driver! How can I fix this?
-
-> We use the NVIDIA [AjaxDriverService](https://gfwsl.geforce.com/services_toolkit/services/com/nvidia/services/AjaxDriverService.php).
-> This is a very frustrating issue that a minority of users face when using this script for the first time.
-> 
-> Some solutions include:
-> 
-> * Restarting your computer (sometimes two restarts are required)
-> * Running the script again with the `-clean` parameter (this seems to fix the issue for most but you will need to reconfigure any control panel and/or driver settings)
 
 ## ZenitH-AT's changes
 
