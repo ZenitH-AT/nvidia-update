@@ -27,9 +27,9 @@ You can use `SchTasks` to run the script automatically with:
 ```ps
 $path = "C:"
 New-Item -ItemType Directory -Force -Path $path | Out-Null
-Invoke-WebRequest -Uri "https://github.com/ZenitH-AT/nvidia-update/raw/master/nvidia.ps1" -OutFile "$path\nvidia.ps1" -UseBasicParsing
-SchTasks /Create /SC DAILY /TN "Nvidia-Updater" /TR "powershell -NoProfile -ExecutionPolicy Bypass -File $path\nvidia.ps1" /ST 10:00
-schtasks /run /tn "Nvidia-Updater"
+Invoke-WebRequest -Uri "https://github.com/ZenitH-AT/nvidia-update/raw/master/nvidia-update.ps1" -OutFile "$path\nvidia-update.ps1" -UseBasicParsing
+SchTasks /Create /SC DAILY /TN "nvidia-update" /TR "powershell -NoProfile -ExecutionPolicy Bypass -File $path\nvidia.ps1" /ST 10:00
+schtasks /run /tn "nvidia-update"
 ```
 
 ## Requirements / Dependencies
