@@ -405,7 +405,9 @@ if ($Schedule) {
 }
 
 ## Check internet connection
-
+if (!(Get-NetRoute | Where-Object DestinationPrefix -eq "0.0.0.0/0" | Get-NetIPInterface | Where-Object ConnectionState -eq "Connected")) {
+	Write-ExitError "No internet connection. After resolving connectivity issues, please try running this script again."
+}
 
 ## Check for script update and replace script if applicable
 Write-Host "Checking for script update..."
