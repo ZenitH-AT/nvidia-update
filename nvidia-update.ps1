@@ -200,7 +200,7 @@ function Start-Installation {
 			# Write newline (`n) character to account for -NoNewline
 			Write-Host -ForegroundColor Yellow "`n$($ErrorMessage)"
 
-			$decision = $Host.UI.PromptForChoice("", "Do you want to try again?", ("&Yes", "&No"), 0)
+			$decision = $Host.UI.PromptForChoice("", "`nDo you want to try again?", ("&Yes", "&No"), 0)
 
 			if ($decision -eq 1) {
 				return $true
@@ -423,7 +423,7 @@ try {
 catch {
 	Write-Host -ForegroundColor Gray "`nUnable to determine latest script version."
 
-	$decision = $Host.UI.PromptForChoice("", "Do you want to continue with the current script?", ("&Yes", "&No"), 0)
+	$decision = $Host.UI.PromptForChoice("", "`nDo you want to continue with the current script?", ("&Yes", "&No"), 0)
 
 	if ($decision -eq 1) {
 		Write-ExitTimer
@@ -437,7 +437,7 @@ else {
 	Write-Host "`nReady to download the latest script file to `"$($scriptPath)`"..."
 	Write-Host "Note: `"optional-components.cfg`" will not be affected."
 
-	$decision = $Host.UI.PromptForChoice("", "Do you want to update to and run the latest script?", ("&Yes", "&No (use current version)", "&Exit"), 0)
+	$decision = $Host.UI.PromptForChoice("", "`nDo you want to update to and run the latest script?", ("&Yes", "&No (use current version)", "&Exit"), 0)
 
 	if ($decision -eq 0) {
 		# Download new script to temporary folder
@@ -500,7 +500,7 @@ else {
 	else {
 		Write-Host "`nSorry, but it looks like you don't have a supported archiver."
 
-		$decision = $Host.UI.PromptForChoice("", "Do you want to install 7-Zip?", ("&Yes", "&No"), 0)
+		$decision = $Host.UI.PromptForChoice("", "`nDo you want to install 7-Zip?", ("&Yes", "&No"), 0)
 
 		if ($decision -eq 0) {
 			# Download 7-Zip to temporary folder and silently install
@@ -571,7 +571,7 @@ $dlDriverPath = "$($tempDir)\$($latestDriverVersion).exe"
 
 Write-Host "`nReady to download the latest driver installer to `"$($dlDriverPath)`"..."
 
-$decision = $Host.UI.PromptForChoice("", "Do you want to download and install the latest driver?", ("&Yes", "&No"), 0)
+$decision = $Host.UI.PromptForChoice("", "`nDo you want to download and install the latest driver?", ("&Yes", "&No"), 0)
 
 if ($decision -eq 0) {
 	# Remove existing temporary folder if present
@@ -643,7 +643,7 @@ Remove-Temp $tempDir
 ## Driver installed; offer a reboot
 Write-Host -ForegroundColor Green "`nDriver installed. You may need to reboot to finish installation."
 
-$decision = $Host.UI.PromptForChoice("", "Do you want to reboot?", ("&Yes", "&No"), 1)
+$decision = $Host.UI.PromptForChoice("", "`nDo you want to reboot?", ("&Yes", "&No"), 1)
 
 if ($decision -eq 0) {
 	Write-host "`nRebooting now..."
