@@ -13,8 +13,9 @@ param (
 )
 
 ## Constant variables and functions
-New-Variable -Name "scriptPath" -Value "$($PSScriptRoot)\$($MyInvocation.MyCommand.Name)" -Option Constant
+New-Variable -Name "osArchitecture" -Value "$(if (([System.IntPtr]::Size -eq 4) -and !(Test-Path "env:\PROCESSOR_ARCHITEW6432")) { 32 } else { 64 })" -Option Constant
 New-Variable -Name "currentScriptVersion" -Value "$(Test-ScriptFileInfo -Path $scriptPath | ForEach-Object { $_.Version })" -Option Constant
+New-Variable -Name "scriptPath" -Value "$($PSScriptRoot)\$($MyInvocation.MyCommand.Name)" -Option Constant
 New-Variable -Name "rawRepo" -Value "https://raw.githubusercontent.com/ZenitH-AT/nvidia-update/master" -Option Constant
 New-Variable -Name "repoVersionFile" -Value "version.txt" -Option Constant
 New-Variable -Name "repoScriptFile" -Value "nvidia-update.ps1" -Option Constant
@@ -316,14 +317,8 @@ function Get-DriverLookupParameters {
 		Write-ExitError "`nUnable to determine GPU product family ID. This should not happen."
 	}
 
-	# Determine operating system version and architecture
+	# Determine operating system version
 	$osVersion = "$([Environment]::OSVersion.Version.Major).$([Environment]::OSVersion.Version.Minor)"
-
-	$osArchitecture = 64
-
-	if (([System.IntPtr]::Size -eq 4) -and !(Test-Path env:\PROCESSOR_ARCHITEW6432)) {
-		$osArchitecture = 32
-	}
 
 	# Determine operating system ID
 	$osData = Get-GpuLookupData 4 $seriesId
@@ -509,7 +504,13 @@ else {
 
 		if ($decision -eq 0) {
 			# Download 7-Zip to temporary folder and silently install
-			$archiverUrl = "https://www.7-zip.org/a/7z1900-x64.exe"
+			if ($osArchitecture -eq 64) {
+				$archiverUrl = "https://www.7-zip.org/a/7z1900-x64.exe"
+			}
+			else {
+				$archiverUrl = "https://www.7-zip.org/a/7z1900.exe"
+			}
+
 			$dlArchiverPath = "$($env:TEMP)\7z1900-x64.exe"
 
 			Write-Host "`nDownloading 7-Zip..."
