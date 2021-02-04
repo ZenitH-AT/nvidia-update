@@ -42,6 +42,7 @@ if (!(Test-Path $taskDir)) {
 # Get latest script version from repository
 try {
     $latestScriptVersion = Invoke-WebRequest -Uri "$($rawRepo)/version.txt"
+	$latestScriptVersion = "$($latestScriptVersion)".Trim()
 }
 catch {
     Write-ExitError "Unable to determine latest script version. Please try running this script again."
@@ -91,7 +92,7 @@ else {
     Write-Host -ForegroundColor Gray "Scheduled task for the latest script version is already registered."
 }
 
-$decision = $Host.UI.PromptForChoice("", "Would you like to run nvidia-update?", ("&Yes", "&No"), 0)
+$decision = $Host.UI.PromptForChoice("", "`nWould you like to run nvidia-update?", ("&Yes", "&No"), 0)
 
 if ($decision -eq 0) {
     Start-Process PowerShell $taskPath
