@@ -436,7 +436,7 @@ catch {
 }
 
 if ($currentScriptVersion -eq $latestScriptVersion) {
-	Write-Host -ForegroundColor "`nThis is the latest script (version $($currentScriptVersion))."
+	Write-Host "`nThis is the latest script (version $($currentScriptVersion))."
 }
 else {
 	Write-Host "`nReady to download the latest script file to `"$($scriptPath)`"..."
