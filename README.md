@@ -23,7 +23,7 @@ Checks for a new version of the NVIDIA Driver, downloads and installs it.
 
 ## Running the script regularly and automatically
 
-You can run the following command to download and run the script weekly with:
+You can run the following command to download and run the script weekly with the following PowerShell command:
 
 ```ps
 Invoke-Expression (Invoke-WebRequest -Uri https://github.com/ZenitH-AT/nvidia-update/raw/master/schedule.ps1).Content
