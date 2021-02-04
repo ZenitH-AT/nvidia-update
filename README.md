@@ -1,13 +1,13 @@
 # nvidia-update (ZenitH-AT fork)
 
-Checks for a new version of the Nvidia Driver, downloads and installs it.
+Checks for a new version of the NVIDIA Driver, downloads and installs it.
 
 ## Usage
 
 * Download `nvidia-update.ps1` and `optional-components.cfg` (optional; allows the user to specify what optional components to include, such as PhysX)
 * If `optional-components.cfg` was downloaded, edit the file based on your preferences (similar to NVSlimmer; by default most components are commented out).
 * Right click `nvidia-update.ps1` and select `Run with PowerShell` (or run with optional parameters)
-* If the script finds a newer version of the nvidia driver, it will download and install a slimmed version of it.
+* If the script finds a newer version of the NVIDIA driver, it will download and install a slimmed version of it.
 
 ### Optional parameters
 
@@ -51,7 +51,7 @@ Q. How does the script check for the latest driver version?
 ## ZenitH-AT's changes
 
 * The script can now self-update.
-* Getting the download link now uses Nvidia's AjaxDriverService. **DCH drivers are now supported** and there is no risk of the script not working if Nvidia changes the download URL format. RP packages are not supported (yet).
+* Getting the download link now uses NVIDIA's AjaxDriverService. **DCH drivers are now supported** and there is no risk of the script not working if Nvidia changes the download URL format. RP packages are not supported (yet).
 * The user can now choose what optional driver components to include in the installation using the optional-components.txt file.
 * The GPU's product family ID (pfid) is now checked and passed to AjaxDriverService (e.g. RTX 2060 ID is 888), as older GPUs may use different drivers.
 * Simplified the archiver program check.
@@ -61,7 +61,7 @@ Q. How does the script check for the latest driver version?
 * Implemented a function for downloading files (Get-WebFile).
 * Driver downloading now uses Get-WebFile (instead of Start-BitsTransfer, which occasionally caused issues).
 * Greatly improved error handling (script is now hopefully idiot-proof).
-* Loading animations are shown where applicable (e.g. "[/] Installing Nvidia driver now...")
+* Loading animations are shown where applicable (e.g. "Installing driver... /")
 * Refactored and reorganised a ton of the code.
 
 ## ZenitH-AT's planned changes

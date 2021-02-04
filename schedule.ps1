@@ -48,7 +48,7 @@ catch {
 }
 
 $taskName = "nvidia-update $($latestScriptVersion)"
-$description = "Nvidia Driver Update"
+$description = "NVIDIA Driver Update"
 $scheduleDay = "Sunday"
 $scheduleTime = "12pm"
 

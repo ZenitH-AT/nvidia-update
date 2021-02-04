@@ -4,7 +4,7 @@
 .AUTHOR ZenitH-AT
 .LICENSEURI https://raw.githubusercontent.com/ZenitH-AT/nvidia-update/master/LICENSE
 .PROJECTURI https://github.com/ZenitH-AT/nvidia-update
-.DESCRIPTION Checks for a new version of the Nvidia driver, downloads and installs it. 
+.DESCRIPTION Checks for a new version of the NVIDIA driver, downloads and installs it. 
 #>
 param (
 	[switch] $Clean = $false, # Delete the existing driver and install the latest one
@@ -14,6 +14,7 @@ param (
 
 ## Constant variables and functions
 New-Variable -Name "scriptPath" -Value "$($PSScriptRoot)\$($MyInvocation.MyCommand.Name)" -Option Constant
+New-Variable -Name "currentScriptVersion" -Value "$(Test-ScriptFileInfo -Path $scriptPath | ForEach-Object { $_.Version })" -Option Constant
 New-Variable -Name "rawRepo" -Value "https://raw.githubusercontent.com/ZenitH-AT/nvidia-update/master" -Option Constant
 New-Variable -Name "repoVersionFile" -Value "version.txt" -Option Constant
 New-Variable -Name "repoScriptFile" -Value "nvidia-update.ps1" -Option Constant
@@ -238,7 +239,7 @@ function Get-GpuData {
 	}
 
 	if (!$compatibleGpuFound) {
-		Write-ExitError "`nUnable to detect a compatible Nvidia device."
+		Write-ExitError "`nUnable to detect a compatible NVIDIA device."
 	}
 
 	return $gpuName, $gpuType, $currentDriverVersion
@@ -377,10 +378,8 @@ function Get-DriverDownloadInfo {
 
 ## Register scheduled task if the $Schedule parameter is set
 if ($Schedule) {
-	$currentScriptVersion = Test-ScriptFileInfo $MyInvocation.InvocationName | ForEach-Object { $_.Version }
-
 	$taskName = "nvidia-update $($currentScriptVersion)"
-	$description = "Nvidia Driver Update"
+	$description = "NVIDIA Driver Update"
 	$scheduleDay = "Sunday"
 	$scheduleTime = "12pm"
 
@@ -418,8 +417,6 @@ if (!(Get-NetRoute | Where-Object DestinationPrefix -eq "0.0.0.0/0" | Get-NetIPI
 ## Check for script update and replace script if applicable
 Write-Host "Checking for script update..."
 
-$currentScriptVersion = Test-ScriptFileInfo $MyInvocation.InvocationName | ForEach-Object { $_.Version }
-
 Write-Host "`n`tCurrent script version:`t`t$($currentScriptVersion)"
 
 try {
@@ -439,7 +436,7 @@ catch {
 }
 
 if ($currentScriptVersion -eq $latestScriptVersion) {
-	Write-Host -ForegroundColor Gray "`nThis is the latest script (version $($currentScriptVersion))."
+	Write-Host -ForegroundColor "`nThis is the latest script (version $($currentScriptVersion))."
 }
 else {
 	Write-Host "`nReady to download the latest script file to `"$($scriptPath)`"..."
