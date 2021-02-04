@@ -4,7 +4,7 @@ Checks for a new version of the NVIDIA Driver, downloads and installs it.
 
 ## Usage
 
-* Download `nvidia-update.ps1` and `optional-components.cfg` (optional; allows the user to specify what optional components to include, such as PhysX)
+* Download the [latest release](https://github.com/ZenitH-AT/nvidia-update/releases/latest) or pull `nvidia-update.ps1` and `optional-components.cfg` (optional; allows the user to specify what optional components to include, such as PhysX)
 * If `optional-components.cfg` was downloaded, edit the file based on your preferences (similar to NVSlimmer; by default most components are commented out).
 * Right click `nvidia-update.ps1` and select `Run with PowerShell` (or run with optional parameters)
 * If the script finds a newer version of the NVIDIA driver, it will download and install a slimmed version of it.
