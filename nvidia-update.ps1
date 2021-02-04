@@ -9,16 +9,16 @@
 param (
 	[switch] $Clean = $false, # Delete the existing driver and install the latest one
 	[switch] $Schedule = $false, # Register a scheduled task to periodically run this script
-	[string] $Directory	= "$($env:TEMP)" # The directory where the script will download and extract the driver
+	[string] $Directory = "$($env:TEMP)" # The directory where the script will download and extract the driver
 )
 
 ## Constant variables and functions
-New-Variable -Name "osArchitecture" -Value "$(if (([System.IntPtr]::Size -eq 4) -and !(Test-Path "env:\PROCESSOR_ARCHITEW6432")) { 32 } else { 64 })" -Option Constant
-New-Variable -Name "currentScriptVersion" -Value "$(Test-ScriptFileInfo -Path $scriptPath | ForEach-Object { $_.Version })" -Option Constant
 New-Variable -Name "scriptPath" -Value "$($PSScriptRoot)\$($MyInvocation.MyCommand.Name)" -Option Constant
+New-Variable -Name "currentScriptVersion" -Value "$(Test-ScriptFileInfo -Path $scriptPath | ForEach-Object { $_.Version })" -Option Constant
 New-Variable -Name "rawRepo" -Value "https://raw.githubusercontent.com/ZenitH-AT/nvidia-update/master" -Option Constant
 New-Variable -Name "repoVersionFile" -Value "version.txt" -Option Constant
 New-Variable -Name "repoScriptFile" -Value "nvidia-update.ps1" -Option Constant
+New-Variable -Name "osArchitecture" -Value "$(if (([System.IntPtr]::Size -eq 4) -and !(Test-Path "env:\PROCESSOR_ARCHITEW6432")) { 32 } else { 64 })" -Option Constant
 
 function Remove-Temp {
 	param (
@@ -405,9 +405,7 @@ if ($Schedule) {
 }
 
 ## Check internet connection
-if (!(Get-NetRoute | Where-Object DestinationPrefix -eq "0.0.0.0/0" | Get-NetIPInterface | Where-Object ConnectionState -eq "Connected")) {
-	Write-ExitError "No internet connection. After resolving connectivity issues, please try running this script again."
-}
+
 
 ## Check for script update and replace script if applicable
 Write-Host "Checking for script update..."
@@ -541,7 +539,7 @@ else {
 }
 
 ## Get and display GPU and driver version information
-Write-Host "`nDetecting GPU and currently installed driver version..."
+Write-Host "`nDetecting GPU and driver version information..."
 
 $gpuName, $gpuType, $currentDriverVersion = Get-GpuData
 
