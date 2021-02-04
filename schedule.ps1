@@ -41,7 +41,7 @@ if (!(Test-Path $taskDir)) {
 
 # Get latest script version from repository
 try {
-    $latestScriptVersion = Invoke-WebRequest -Uri "$($rawRepo)/current-version.txt"
+    $latestScriptVersion = Invoke-WebRequest -Uri "$($rawRepo)/version.txt"
 }
 catch {
     Write-ExitError "Unable to determine latest script version. Please try running this script again."
