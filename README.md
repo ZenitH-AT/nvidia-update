@@ -1,6 +1,6 @@
 # nvidia-update (ZenitH-AT fork)
 
-Checks for a new version of the NVIDIA Driver, downloads and installs it.
+Checks for a new version of the NVIDIA Driver, downloads and installs it. Windows 10 only.
 
 ## Usage
 
@@ -19,14 +19,14 @@ Checks for a new version of the NVIDIA Driver, downloads and installs it.
 
 * While holding `shift` press `right click` in the folder with the script
 * Select `Open PowerShell window here`
-* Enter `.\nvidia-update.ps1 <parameters>` (ex: `.\nvidia-update.ps1 -Clean -Directory C:\NVIDIA`)
+* Enter `.\nvidia-update.ps1 <parameters>` (ex: `.\nvidia-update.ps1 -Clean -Directory "C:\NVIDIA"`)
 
 ## Running the script regularly and automatically
 
 You can run the following PowerShell command to download and run the script weekly:
 
 ```ps
-Invoke-Expression (Invoke-WebRequest -Uri https://github.com/ZenitH-AT/nvidia-update/raw/master/schedule.ps1).Content
+Invoke-Expression (Invoke-WebRequest -Uri "https://github.com/ZenitH-AT/nvidia-update/raw/master/schedule.ps1").Content
 ```
 
 ## Requirements / Dependencies
@@ -39,22 +39,22 @@ Q. How does the script check for the latest driver version?
 
 > It uses the NVIDIA [AjaxDriverService](https://gfwsl.geforce.com/services_toolkit/services/com/nvidia/services/AjaxDriverService.php).
 >
-> 
->
 > Example:
-> ```https://gfwsl.geforce.com/services_toolkit/services/com/nvidia/services/AjaxDriverService.php?func=DriverManualLookup&pfid=877&osID=57&dch=1```
 >
-> * **pfid**: Product Family (GPU) ID (e.g. _GeForce GTX 2080 Ti_: 877)
+> ```https://gfwsl.geforce.com/services_toolkit/services/com/nvidia/services/AjaxDriverService.php?func=DriverManualLookup&pfid=877&osID=57&dch=1```
+> * **pfid**: Product Family (GPU) ID (e.g. _GeForce RTX 3070_: 933)
 > * **osID**: Operating System ID (e.g. _Windows 10 64-bit_: 57)
-> * **dch**: Windows Driver Type (_Standard_: 0, _DCH_: 1)
+> * **dch**: Windows Driver Type (_Standard_: 0; _DCH_: 1)
+>
+> The pfid and osID are determined using the NVIDIA Download API ([lookupValueSearch](https://www.nvidia.com/Download/API/lookupValueSearch.aspx)).
 
 ## ZenitH-AT's changes
 
 * The script can now self-update.
-* Getting the download link now uses NVIDIA's AjaxDriverService. **DCH drivers are now supported** and there is no risk of the script not working if Nvidia changes the download URL format. RP packages are not supported (yet).
-* The user can now choose what optional driver components to include in the installation using the optional-components.txt file.
-* The GPU's product family ID (pfid) is now checked and passed to AjaxDriverService (e.g. RTX 2060 ID is 888), as older GPUs may use different drivers.
-* Simplified the archiver program check.
+* Getting the download link now uses NVIDIA's AjaxDriverService. **DCH drivers are now supported** and there is no risk of the script not working if Nvidia changes the download URL format. RP packages are not supported.
+* The GPU's product family ID (pfid) and operating system ID (osID) are now determined using the NVIDIA Download API and passed to AjaxDriverService (e.g. RTX 2060 ID is 888), rather than using static values, as older GPUs may use different drivers.
+* The user can now choose what optional driver components to include in the installation using the optional-components.cfg file.
+* Simplified and improved the archiver program check, download and installation.
 * Simplified the OS version and architecture check and driver version comparison.
 * Simplified and improved the scheduled task creation.
 * The script now checks for an internet connection before proceeding.
@@ -67,4 +67,5 @@ Q. How does the script check for the latest driver version?
 ## ZenitH-AT's planned changes
 
 * Series data should not be restricted to GeForce cards (at the moment the script cannot update TITAN GPUs, Quadro GPUs, etc.).
+- Rather than updating the script to include queries for the specific ParentIDs for TITAN and Quadro cards, a separate script may be created to reguarly pull all the graphics card names and pfids (as well as operating names and osIDs) from the NVIDIA Download API and store them in a JSON file. Several functions in the nvidia-update.ps1 script can then be removed and replaced with a simple query to this file.
 * 7-Zip download should get the URL of the latest version instead of using a predefined URL.
