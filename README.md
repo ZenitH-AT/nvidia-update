@@ -67,5 +67,5 @@ Q. How does the script check for the latest driver version?
 ## ZenitH-AT's planned changes
 
 * Series data should not be restricted to GeForce cards (at the moment the script cannot update TITAN GPUs, Quadro GPUs, etc.).
-- Rather than updating the script to include queries for the specific ParentIDs for TITAN and Quadro cards, a separate script may be created to reguarly pull all the graphics card names and pfids (as well as operating names and osIDs) from the NVIDIA Download API and store them in a JSON file. Several functions in the nvidia-update.ps1 script can then be removed and replaced with a simple query to this file.
+	* Rather than updating the script to include queries for the specific ParentIDs for TITAN and Quadro cards, a separate script may be created to reguarly pull all the graphics card names and pfids (as well as operating names and osIDs) from the NVIDIA Download API and store them in a JSON file. Several functions in the nvidia-update.ps1 script can then be removed and replaced with a simple query to this file.
 * 7-Zip download should get the URL of the latest version instead of using a predefined URL.
