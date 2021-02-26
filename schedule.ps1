@@ -1,5 +1,5 @@
 <#PSScriptInfo
-.VERSION 1.0
+.VERSION 1.1
 .GUID 544ddf4b-d7df-44b2-abcf-f452793c0fa7
 .AUTHOR ZenitH-AT
 .LICENSEURI https://raw.githubusercontent.com/ZenitH-AT/nvidia-update/master/LICENSE
@@ -8,7 +8,7 @@
 #>
 
 ## Constant variables and functions
-New-Variable -Name "rawRepo" -Value "https://raw.githubusercontent.com/ZenitH-AT/nvidia-update/master" -Option Constant
+New-Variable -Name "rawScriptRepo" -Value "https://raw.githubusercontent.com/ZenitH-AT/nvidia-update/master" -Option Constant
 
 function Write-ExitError {
 	param (
@@ -38,7 +38,7 @@ if (!(Test-Path $taskDir)) {
 
 # Get latest script version from repository
 try {
-	$latestScriptVersion = Invoke-WebRequest -Uri "$($rawRepo)/version.txt"
+	$latestScriptVersion = Invoke-WebRequest -Uri "$($rawScriptRepo)/version.txt"
 	$latestScriptVersion = "$($latestScriptVersion)".Trim()
 }
 catch {
@@ -72,8 +72,8 @@ foreach ($existingTask in $existingTasks) {
 if ($registerTask) {
 	# Download lastest script files
 	try {
-		Invoke-WebRequest -Uri "$($rawRepo)/nvidia-update.ps1" -OutFile $taskPath
-		Invoke-WebRequest -Uri "$($rawRepo)/optional-components.cfg" -OutFile "$($taskDir)\optional-components.cfg"
+		Invoke-WebRequest -Uri "$($rawScriptRepo)/nvidia-update.ps1" -OutFile $taskPath
+		Invoke-WebRequest -Uri "$($rawScriptRepo)/optional-components.cfg" -OutFile "$($taskDir)\optional-components.cfg"
 	}
 	catch {
 		Write-ExitError "Downloading script files failed. Please try running this script again."

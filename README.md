@@ -46,26 +46,25 @@ Q. How does the script check for the latest driver version?
 > * **osID**: Operating System ID (e.g. _Windows 10 64-bit_: 57)
 > * **dch**: Windows Driver Type (_Standard_: 0; _DCH_: 1)
 >
-> The pfid and osID are determined using the NVIDIA Download API ([lookupValueSearch](https://www.nvidia.com/Download/API/lookupValueSearch.aspx)).
+> The pfid and osID are determined by reading files in the [ZenitH-AT/nvidia-data](https://github.com/ZenitH-AT/nvidia-data) repository, which queries the NVIDIA Download API ([lookupValueSearch](https://www.nvidia.com/Download/API/lookupValueSearch.aspx)).
 
 ## ZenitH-AT's changes
 
 * The script can now self-update.
 * Getting the download link now uses NVIDIA's AjaxDriverService. **DCH drivers are now supported** and there is no risk of the script not working if Nvidia changes the download URL format. RP packages are not supported.
-* The GPU's product family ID (pfid) and operating system ID (osID) are now determined using the NVIDIA Download API and passed to AjaxDriverService (e.g. RTX 2060 ID is 888), rather than using static values, as older GPUs may use different drivers.
+* The GPU's product family ID (pfid) and operating system ID (osID) are now determined by reading files in the [ZenitH-AT/nvidia-data](https://github.com/ZenitH-AT/nvidia-data) repository, rather than using static values, as older GPUs may use different drivers.
 * The user can now choose what optional driver components to include in the installation using the optional-components.cfg file.
 * Simplified and improved the archiver program check, download and installation.
-* Simplified the OS version and architecture check and driver version comparison.
+* Simplified the OS version and architecture (osBits) check and driver version comparison.
+* Simplified the GPU name and driver version retrieval (Get-GpuData).
 * Simplified and improved the scheduled task creation.
 * The script now checks for an internet connection before proceeding.
 * Implemented a function for downloading files (Get-WebFile).
-* Driver downloading now uses Get-WebFile (instead of Start-BitsTransfer, which occasionally caused issues).
+* Driver downloading now uses a custom Get-WebFile function (instead of Start-BitsTransfer, which occasionally caused issues).
 * Greatly improved error handling (script is now hopefully idiot-proof).
 * Loading animations are shown where applicable (e.g. "Installing driver... /")
 * Refactored and reorganised a ton of the code.
 
 ## ZenitH-AT's planned changes
 
-* Series data should not be restricted to GeForce cards (at the moment the script cannot update TITAN GPUs, Quadro GPUs, etc.).
-	* Rather than updating the script to include queries for the specific ParentIDs for TITAN and Quadro cards, a separate script may be created to reguarly pull all the graphics card names and pfids (as well as operating names and osIDs) from the NVIDIA Download API and store them in a JSON file. Several functions in the nvidia-update.ps1 script can then be removed and replaced with a simple query to this file.
 * 7-Zip download should get the URL of the latest version instead of using a predefined URL.

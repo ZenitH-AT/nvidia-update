@@ -1,5 +1,5 @@
 <#PSScriptInfo
-.VERSION 1.5
+.VERSION 1.6
 .GUID dd04650b-78dc-4761-89bf-b6eeee74094c
 .AUTHOR ZenitH-AT
 .LICENSEURI https://raw.githubusercontent.com/ZenitH-AT/nvidia-update/master/LICENSE
@@ -15,10 +15,13 @@ param (
 ## Constant variables and functions
 New-Variable -Name "scriptPath" -Value "$($PSScriptRoot)\$($MyInvocation.MyCommand.Name)" -Option Constant
 New-Variable -Name "currentScriptVersion" -Value "$(Test-ScriptFileInfo -Path $scriptPath | ForEach-Object { $_.Version })" -Option Constant
-New-Variable -Name "rawRepo" -Value "https://raw.githubusercontent.com/ZenitH-AT/nvidia-update/master" -Option Constant
-New-Variable -Name "repoVersionFile" -Value "version.txt" -Option Constant
-New-Variable -Name "repoScriptFile" -Value "nvidia-update.ps1" -Option Constant
-New-Variable -Name "osArchitecture" -Value "$(if (([System.IntPtr]::Size -eq 4) -and !(Test-Path "env:\PROCESSOR_ARCHITEW6432")) { 32 } else { 64 })" -Option Constant
+New-Variable -Name "rawScriptRepo" -Value "https://raw.githubusercontent.com/ZenitH-AT/nvidia-update/master" -Option Constant
+New-Variable -Name "scriptRepoVersionFile" -Value "version.txt" -Option Constant
+New-Variable -Name "scriptRepoScriptFile" -Value "nvidia-update.ps1" -Option Constant
+New-Variable -Name "rawDataRepo" -Value "https://raw.githubusercontent.com/ZenitH-AT/nvidia-data/main" -Option Constant
+New-Variable -Name "dataRepoGpuDataFile" -Value "gpu-data.json" -Option Constant
+New-Variable -Name "dataRepoOsDataFile" -Value "os-data.json" -Option Constant
+New-Variable -Name "osBits" -Value "$(if ([Environment]::Is64BitOperatingSystem) { 64 } else { 32 })" -Option Constant
 
 function Remove-Temp {
 	param (
@@ -218,18 +221,12 @@ function Get-GpuData {
 		$gpuName = $gpu.Name
 
 		if ($gpuName -match "^NVIDIA") {
-			# Format GPU name, accounting for card variants (e.g. 1060 6GB)
-			if ($gpuName -match "(?<=NVIDIA )(.*(?= [0-9]+GB)|.*)") {
+			# Clean GPU name, accounting for card variants (e.g. 1060 6GB, 760Ti (OEM))
+			if ($gpuName -match "(?<=NVIDIA )(.*(?= [0-9]+GB)|.*(?= \([A-Z]+\))|.*)") {
 				$gpuName = $Matches[0].Trim()
 			}
 			else {
 				Write-ExitError "`nUnrecognised GPU name $($gpuName). This should not happen."
-			}
-
-			$gpuType = "Desktop"
-
-			if ($gpuName -match "(M|Q(X|\s+(LE|GTX|GTS|GS|GT|G))?$|GeForce Go)") {
-				$gpuType = "Notebook" 
 			}
 
 			$currentDriverVersion = $gpu.DriverVersion.SubString(7).Remove(1, 1).Insert(3, ".")
@@ -243,74 +240,22 @@ function Get-GpuData {
 		Write-ExitError "`nUnable to detect a compatible NVIDIA device."
 	}
 
-	return $gpuName, $gpuType, $currentDriverVersion
-}
-
-function Get-GpuLookupData {
-	param (
-		[string] $TypeId,
-		[string] $ParentId
-	)
-
-	# TypeId - 2: product series; 3: product family (GPU); 4: operating system
-
-	$request = "http://www.nvidia.com/Download/API/lookupValueSearch.aspx?"
-	$request += "TypeID=$($TypeId)&ParentID=$($ParentId)"
-
-	try {
-		$payload = Invoke-RestMethod $request
-
-		return $payload.LookupValueSearch.LookupValues.LookupValue
-	}
-	catch {
-		Write-ExitError "Unable to get GPU lookup parameters. Please try running this script again."
-	}
+	return $gpuName, $currentDriverVersion
 }
 
 function Get-DriverLookupParameters {
 	param (
-		[string] $GpuName,
-		[string] $GpuType
+		[string] $GpuName
 	)
 
-	# Determine product series ID
-	$seriesData = Get-GpuLookupData 2 1
-
-	foreach ($series in $seriesData) {
-		# Limit to desktop/notebook
-		if ($GpuType -eq "Notebook") {
-			if ($series.Name -notlike "*Notebook*") { continue }
-		}
-		else {
-			if ($series.Name -like "*Notebook*") { continue }
-		}
-
-		$seriesId = $series.Value
-
-		# Determine product family (GPU) ID
-		$familyData = Get-GpuLookupData 3 $seriesId
-
-		foreach ($gpu in $familyData) {
-			$searchGpuName = $gpu.Name.Replace("NVIDIA", "").Trim()
-
-			if ($searchGpuName -eq $GpuName) {
-				$gpuId = $gpu.Value
-				break
-			}
-			elseif ($searchGpuName -like "*/*") {
-				if ((($searchGpuName -replace "(\/|nForce).*$", "").Trim() -eq $GpuName) -or 
-					(($searchGpuName -replace "(?:[^\s]+\/|(?:[^\s]+\s+){2}\/|.*?(nForce))", "" -replace "\s+", " ").Trim() -eq $GpuName)) {
-
-					$gpuId = $gpu.Value
-					break
-				}
-			}
-		}
-
-		# Stop searching when product series ID is correct
-		if ($gpuId) {
-			break
-		}
+	# Determine product family (GPU) ID
+	try {
+		$gpuData = Invoke-RestMethod -Uri "$($rawDataRepo)/$($dataRepoGpuDataFile)"
+		
+		$gpuId = $gpuData.$GpuName
+	}
+	catch {
+		Write-ExitError "Unable to retrieve GPU data. Please try running this script again."
 	}
 
 	if (!$gpuId) {
@@ -321,11 +266,16 @@ function Get-DriverLookupParameters {
 	$osVersion = "$([Environment]::OSVersion.Version.Major).$([Environment]::OSVersion.Version.Minor)"
 
 	# Determine operating system ID
-	$osData = Get-GpuLookupData 4 $seriesId
+	try {
+		$osData = Invoke-RestMethod -Uri "$($rawDataRepo)/$($dataRepoOsDataFile)"
+	}
+	catch {
+		Write-ExitError "Unable to retrieve OS data. Please try running this script again."
+	}
 
 	foreach ($os in $osData) {
-		if (($os.Code -eq $osVersion) -and ($os.Name -match $osArchitecture)) {
-			$osID = $os.Value
+		if (($os.code -eq $osVersion) -and ($os.name -match $osBits)) {
+			$osId = $os.id
 			break
 		}
 	}
@@ -357,7 +307,7 @@ function Get-DriverDownloadInfo {
 	$request += "func=DriverManualLookup&pfid=$($GpuId)&osID=$($OsId)&dch=$($Dch)"
 
 	try {
-		$payload = Invoke-RestMethod $request
+		$payload = Invoke-RestMethod -Uri $request
 
 		if ($payload.Success -eq 1) {
 			return $payload.IDS[0].downloadInfo
@@ -415,7 +365,7 @@ Write-Host "Checking for script update..."
 Write-Host "`n`tCurrent script version:`t`t$($currentScriptVersion)"
 
 try {
-	$latestScriptVersion = Invoke-WebRequest -Uri "$($rawRepo)/$($repoVersionFile)"
+	$latestScriptVersion = Invoke-WebRequest -Uri "$($rawScriptRepo)/$($scriptRepoVersionFile)"
 	$latestScriptVersion = "$($latestScriptVersion)".Trim()
 
 	Write-Host "`tLatest script version:`t`t$($latestScriptVersion)"
@@ -441,11 +391,11 @@ else {
 
 	if ($decision -eq 0) {
 		# Download new script to temporary folder
-		$dlScriptPath = "$($env:TEMP)\$($repoScriptFile)"
+		$dlScriptPath = "$($env:TEMP)\$($scriptRepoScriptFile)"
 
 		Write-Host "`nDownloading latest script file..."
 
-		Get-WebFile "$($rawRepo)/$($repoScriptFile)" $dlScriptPath
+		Get-WebFile "$($rawScriptRepo)/$($scriptRepoScriptFile)" $dlScriptPath
 
 		# Overwrite this script and delete temporary file
 		Copy-Item $dlScriptPath -Destination $scriptPath
@@ -504,7 +454,7 @@ else {
 
 		if ($decision -eq 0) {
 			# Download 7-Zip to temporary folder and silently install
-			if ($osArchitecture -eq 64) {
+			if ($osBits -eq "64") {
 				$archiverUrl = "https://www.7-zip.org/a/7z1900-x64.exe"
 			}
 			else {
@@ -543,13 +493,13 @@ else {
 ## Get and display GPU and driver version information
 Write-Host "`nDetecting GPU and driver version information..."
 
-$gpuName, $gpuType, $currentDriverVersion = Get-GpuData
+$gpuName, $currentDriverVersion = Get-GpuData
 
 Write-Host "`n`tDetected graphics card name:`t$($gpuName)"
 Write-Host "`tCurrent driver version:`t`t$($currentDriverVersion)"
 
 try {
-	$gpuId, $osId, $dch = Get-DriverLookupParameters $gpuName $gpuType
+	$gpuId, $osId, $dch = Get-DriverLookupParameters $gpuName
 	$driverDownloadInfo = Get-DriverDownloadInfo $gpuId $osId $dch
 
 	$latestDriverVersion = $driverDownloadInfo.Version
@@ -584,7 +534,7 @@ if ($decision -eq 0) {
 	Get-WebFile $driverDownloadInfo.DownloadURL $dlDriverPath
 }
 else {
-	Write-ExitError "Driver download cancelled." -RemoveTemp $tempDir
+	Write-ExitError "`nDriver download cancelled."
 }
 
 ## Extract setup files
