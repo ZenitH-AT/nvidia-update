@@ -51,7 +51,7 @@ Q. How does the script check for the latest driver version?
 ## ZenitH-AT's changes
 
 * The script can now self-update.
-* Getting the download link now uses NVIDIA's AjaxDriverService. **DCH drivers are now supported** and there is no risk of the script not working if Nvidia changes the download URL format. RP packages are not supported.
+* Getting the download link now uses NVIDIA's AjaxDriverService. DCH drivers are now supported and there is no risk of the script not working if NVIDIA changes the download URL format. RP packages are not supported.
 * The GPU's product family ID (pfid) and operating system ID (osID) are now determined by reading files in the [ZenitH-AT/nvidia-data](https://github.com/ZenitH-AT/nvidia-data) repository, rather than using static values, as older GPUs may use different drivers.
 * The user can now choose what optional driver components to include in the installation using the optional-components.cfg file.
 * Simplified and improved the archiver program check, download and installation.
