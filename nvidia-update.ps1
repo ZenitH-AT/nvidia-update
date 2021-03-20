@@ -1,5 +1,5 @@
 <#PSScriptInfo
-.VERSION 1.6
+.VERSION 1.7
 .GUID dd04650b-78dc-4761-89bf-b6eeee74094c
 .AUTHOR ZenitH-AT
 .LICENSEURI https://raw.githubusercontent.com/ZenitH-AT/nvidia-update/master/LICENSE
@@ -13,7 +13,7 @@ param (
 )
 
 ## Constant variables and functions
-New-Variable -Name "scriptPath" -Value "$($PSScriptRoot)\$($MyInvocation.MyCommand.Name)" -Option Constant
+New-Variable -Name "scriptPath" -Value "$($MyInvocation.MyCommand.Path)" -Option Constant
 New-Variable -Name "currentScriptVersion" -Value "$(Test-ScriptFileInfo -Path $scriptPath | ForEach-Object { $_.Version })" -Option Constant
 New-Variable -Name "rawScriptRepo" -Value "https://raw.githubusercontent.com/ZenitH-AT/nvidia-update/master" -Option Constant
 New-Variable -Name "scriptRepoVersionFile" -Value "version.txt" -Option Constant
@@ -402,22 +402,11 @@ else {
 		
 		Remove-Item $dlScriptPath -Force
 
-		# Run new script with the same parameters
-		$parameters = ""
-
-		foreach ($key in $MyInvocation.BoundParameters.keys) {
-			$parameters += "-$($key) $($MyInvocation.BoundParameters[$key]) "
-		}
-
-		# Include -Schedule parameter if a scheduled task is registered to update the task
-		$existingTasks = Get-ScheduledTask | Where-Object { $_.TaskName -match "^nvidia-update." }
-
-		if ($existingTasks) {
-			$parameters += "-Schedule"
-		}
-
-		Start-Process PowerShell "$($scriptPath) $($parameters)"
-
+		# Run new script with the same arguments; include -Schedule if a scheduled task is registered to update the task
+		$argumentList = "$($MyInvocation.UnboundArguments)$(if (Get-ScheduledTask | Where-Object { $_.TaskName -match '^nvidia-update.' }) { ' -Schedule' })"
+		
+		Start-Process PowerShell -ArgumentList "-File `"" + $scriptPath + "`" " + $argumentList
+		
 		exit
 	}
 	elseif ($decision -eq 2) {
