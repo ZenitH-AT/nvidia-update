@@ -405,7 +405,7 @@ else {
 		# Run new script with the same arguments; include -Schedule if a scheduled task is registered to update the task
 		$argumentList = "$($MyInvocation.UnboundArguments)$(if (Get-ScheduledTask | Where-Object { $_.TaskName -match '^nvidia-update.' }) { ' -Schedule' })"
 		
-		Start-Process PowerShell -ArgumentList "-File `"" + $scriptPath + "`" " + $argumentList
+		Start-Process -FilePath "powershell" -ArgumentList "-File `"$($scriptPath)`" $($argumentList)"
 		
 		exit
 	}
