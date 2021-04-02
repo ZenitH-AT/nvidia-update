@@ -71,9 +71,9 @@ function Write-ExitTimer {
 	$seconds = [System.Math]::Floor($Milliseconds / 1000)
 
 	Write-Host "`nExiting script in $($seconds) seconds..."
-	
+
 	Start-Sleep -Milliseconds $Milliseconds
-	
+
 	exit
 }
 
@@ -144,7 +144,7 @@ function Get-WebFile {
 		}
 
 		Close-Stream $targetStream $responseStream
-		
+
 		Write-Progress -Activity $activity -Completed
 	}
 	catch {
@@ -152,7 +152,7 @@ function Get-WebFile {
 		if (Test-Path $TargetPath) {
 			if ($targetStream -and $responseStream) {
 				Close-Stream $targetStream $responseStream
-			} 
+			}
 
 			Remove-Item $TargetPath -Force
 		}
