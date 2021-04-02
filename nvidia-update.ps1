@@ -1,5 +1,5 @@
 <#PSScriptInfo
-.VERSION 1.7
+.VERSION 1.8
 .GUID dd04650b-78dc-4761-89bf-b6eeee74094c
 .AUTHOR ZenitH-AT
 .LICENSEURI https://raw.githubusercontent.com/ZenitH-AT/nvidia-update/master/LICENSE
@@ -77,6 +77,14 @@ function Write-ExitTimer {
 	exit
 }
 
+function Convert-BytesToMebibytesInt {
+	param (
+		$Bytes
+	)
+
+	return [System.Math]::Floor($Bytes / 1048576)
+}
+
 function Close-Stream {
 	param (
 		$TargetStream,
@@ -105,7 +113,7 @@ function Get-WebFile {
 
 		$response = $request.GetResponse()
 
-		$totalLength = [System.Math]::Floor($response.get_ContentLength() / 1024)
+		$totalLengthMiB = Convert-BytesToMebibytesInt $response.get_ContentLength()
 
 		$responseStream = $response.GetResponseStream()
 
@@ -115,7 +123,7 @@ function Get-WebFile {
 
 		$count = $responseStream.Read($buffer, 0, $buffer.Length)
 
-		$downloadedBytes = $count
+		$downloadedB = $count
 
 		$activity = "Downloading file `"$($url -split "/" | Select-Object -Last 1)`" to `"$($TargetPath)`"..."
 
@@ -124,18 +132,20 @@ function Get-WebFile {
 
 			$count = $responseStream.Read($buffer, 0, $buffer.Length)
 
-			$downloadedBytes += $count
+			$downloadedB += $count
 
-			$downloadedKBytes = [System.Math]::Floor($downloadedBytes / 1024)
+			$downloadedMiB = Convert-BytesToMebibytesInt $downloadedB
 
-			$status = "Downloaded ($($downloadedKBytes)K of $($totalLength)K):"
+			$status = "Downloaded $($downloadedMiB) of $($totalLengthMiB) MB"
 
-			$percentComplete = ($downloadedKBytes / $totalLength) * 100
+			$percentComplete = ($downloadedMiB / $totalLengthMiB) * 100
 
 			Write-Progress -Activity $activity -Status $status -PercentComplete $percentComplete
 		}
 
 		Close-Stream $targetStream $responseStream
+		
+		Write-Progress -Activity $activity -Completed
 	}
 	catch {
 		# Remove partially downloaded file if present
@@ -348,7 +358,7 @@ if ($Schedule) {
 	}
 
 	if ($registerTask) {
-		Register-ScheduledTask -TaskName $taskName -Action $action -Settings $settings -Trigger $trigger -Description $description | Out-Null
+		Register-ScheduledTask -TaskName $taskName -Action $action -Settings $settings -Trigger $trigger -Description $description > $null
 	}
 
 	Write-Host "This script is scheduled to run every $($scheduleDay) at $($scheduleTime).`n"
@@ -405,7 +415,7 @@ else {
 		# Run new script with the same arguments; include -Schedule if a scheduled task is registered to update the task
 		$argumentList = "$($MyInvocation.UnboundArguments)$(if (Get-ScheduledTask | Where-Object { $_.TaskName -match '^nvidia-update.' }) { ' -Schedule' })"
 		
-		Start-Process -FilePath "powershell" -ArgumentList "-File `"$($scriptPath)`" $($argumentList)"
+		Start-Process -FilePath "powershell" -ArgumentList "-File '$($scriptPath)' $($argumentList)"
 		
 		exit
 	}
@@ -516,7 +526,7 @@ if ($decision -eq 0) {
 	# Remove existing temporary folder if present
 	Remove-Temp $tempDir
 
-	New-Item -Path $tempDir -ItemType "directory" | Out-Null
+	New-Item -Path $tempDir -ItemType "directory" > $null
 
 	Write-Host "`nDownloading latest driver installer..."
 
