@@ -1,5 +1,5 @@
 <#PSScriptInfo
-.VERSION 1.1
+.VERSION 1.2
 .GUID 544ddf4b-d7df-44b2-abcf-f452793c0fa7
 .AUTHOR ZenitH-AT
 .LICENSEURI https://raw.githubusercontent.com/ZenitH-AT/nvidia-update/master/LICENSE
@@ -57,7 +57,7 @@ $trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek $scheduleDay -At $schedu
 # Register task if it doesn't already exist or if it references a different script version (and delete outdated tasks)
 $registerTask = $true
 
-$existingTasks = Get-ScheduledTask | Where-Object { $_.TaskName -match "^nvidia-update." }
+$existingTasks = Get-ScheduledTask | Where-Object TaskName -match "^nvidia-update."
 
 foreach ($existingTask in $existingTasks) {
 	$registerTask = $false
