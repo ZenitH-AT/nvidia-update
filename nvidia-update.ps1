@@ -1,5 +1,5 @@
 <#PSScriptInfo
-.VERSION 1.8
+.VERSION 1.9
 .GUID dd04650b-78dc-4761-89bf-b6eeee74094c
 .AUTHOR ZenitH-AT
 .LICENSEURI https://raw.githubusercontent.com/ZenitH-AT/nvidia-update/master/LICENSE
@@ -9,12 +9,14 @@
 param (
 	[switch] $Clean = $false, # Delete the existing driver and install the latest one
 	[switch] $Schedule = $false, # Register a scheduled task to periodically run this script
+	[switch] $Desktop = $false, # Override the desktop/notebook check and download the desktop driver; useful when using an external GPU
+	[switch] $Notebook = $false, # Override the desktop/notebook check and download the notebook driver
 	[string] $Directory = "$($env:TEMP)" # The directory where the script will download and extract the driver
 )
 
 ## Constant variables and functions
 New-Variable -Name "scriptPath" -Value "$($MyInvocation.MyCommand.Path)" -Option Constant
-New-Variable -Name "currentScriptVersion" -Value "$(Test-ScriptFileInfo -Path $scriptPath | ForEach-Object { $_.Version })" -Option Constant
+New-Variable -Name "currentScriptVersion" -Value "$(Test-ScriptFileInfo -Path $scriptPath | ForEach-Object Version)" -Option Constant
 New-Variable -Name "rawScriptRepo" -Value "https://raw.githubusercontent.com/ZenitH-AT/nvidia-update/master" -Option Constant
 New-Variable -Name "scriptRepoVersionFile" -Value "version.txt" -Option Constant
 New-Variable -Name "scriptRepoScriptFile" -Value "nvidia-update.ps1" -Option Constant
@@ -241,6 +243,10 @@ function Get-GpuData {
 
 			$currentDriverVersion = $gpu.DriverVersion.SubString(7).Remove(1, 1).Insert(3, ".")
 
+			# Determine if computer is a notebook to always download the correct driver,
+			# since some GPUs are present in both a desktop and notebook series (e.g. GeForce GTX 1050 Ti)
+			$isNotebook = [bool] (Get-CimInstance -ClassName Win32_SystemEnclosure).ChassisTypes.Where({ $_ -in @(9, 10, 14) })
+
 			$compatibleGpuFound = $true
 			break
 		}
@@ -250,19 +256,26 @@ function Get-GpuData {
 		Write-ExitError "`nUnable to detect a compatible NVIDIA device."
 	}
 
-	return $gpuName, $currentDriverVersion
+	return $gpuName, $currentDriverVersion, $isNotebook
 }
 
 function Get-DriverLookupParameters {
 	param (
-		[string] $GpuName
+		[string] $GpuName,
+		[bool] $IsNotebook
 	)
 
 	# Determine product family (GPU) ID
 	try {
 		$gpuData = Invoke-RestMethod -Uri "$($rawDataRepo)/$($dataRepoGpuDataFile)"
-		
-		$gpuId = $gpuData.$GpuName
+
+		if ($Desktop -or !$IsNotebook) {
+			$gpuId = $gpuData."desktop".$GpuName
+		}
+
+		if ($Notebook -or $IsNotebook) {
+			$gpuId = $gpuData."notebook".$GpuName
+		}
 	}
 	catch {
 		Write-ExitError "Unable to retrieve GPU data. Please try running this script again."
@@ -345,7 +358,7 @@ if ($Schedule) {
 	# Register task if it doesn't already exist or if it references a different script version (and delete outdated tasks)
 	$registerTask = $true
 
-	$existingTasks = Get-ScheduledTask | Where-Object { $_.TaskName -match "^nvidia-update." }
+	$existingTasks = Get-ScheduledTask | Where-Object TaskName -match "^nvidia-update."
 	
 	foreach ($existingTask in $existingTasks) {
 		$registerTask = $false
@@ -413,7 +426,7 @@ else {
 		Remove-Item $dlScriptPath -Force
 
 		# Run new script with the same arguments; include -Schedule if a scheduled task is registered to update the task
-		$argumentList = "$($MyInvocation.UnboundArguments)$(if (Get-ScheduledTask | Where-Object { $_.TaskName -match '^nvidia-update.' }) { ' -Schedule' })"
+		$argumentList = "$($MyInvocation.UnboundArguments)$(if (Get-ScheduledTask | Where-Object TaskName -match '^nvidia-update.') { ' -Schedule' })"
 		
 		Start-Process -FilePath "powershell" -ArgumentList "-File '$($scriptPath)' $($argumentList)"
 		
@@ -492,13 +505,13 @@ else {
 ## Get and display GPU and driver version information
 Write-Host "`nDetecting GPU and driver version information..."
 
-$gpuName, $currentDriverVersion = Get-GpuData
+$gpuName, $currentDriverVersion, $isNotebook = Get-GpuData
 
 Write-Host "`n`tDetected graphics card name:`t$($gpuName)"
 Write-Host "`tCurrent driver version:`t`t$($currentDriverVersion)"
 
 try {
-	$gpuId, $osId, $dch = Get-DriverLookupParameters $gpuName
+	$gpuId, $osId, $dch = Get-DriverLookupParameters $gpuName $isNotebook
 	$driverDownloadInfo = Get-DriverDownloadInfo $gpuId $osId $dch
 
 	$latestDriverVersion = $driverDownloadInfo.Version
