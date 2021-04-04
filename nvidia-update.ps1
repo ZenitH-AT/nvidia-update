@@ -1,5 +1,5 @@
 <#PSScriptInfo
-.VERSION 1.9
+.VERSION 1.10
 .GUID dd04650b-78dc-4761-89bf-b6eeee74094c
 .AUTHOR ZenitH-AT
 .LICENSEURI https://raw.githubusercontent.com/ZenitH-AT/nvidia-update/master/LICENSE
@@ -24,10 +24,12 @@ New-Variable -Name "rawDataRepo" -Value "https://raw.githubusercontent.com/Zenit
 New-Variable -Name "dataRepoGpuDataFile" -Value "gpu-data.json" -Option Constant
 New-Variable -Name "dataRepoOsDataFile" -Value "os-data.json" -Option Constant
 New-Variable -Name "osBits" -Value "$(if ([Environment]::Is64BitOperatingSystem) { 64 } else { 32 })" -Option Constant
+New-Variable -Name "dataUnits" -Value @("B", "KiB", "MiB") -Option Constant
+New-Variable -Name "dataDividends" -Value @(1, 1024, 1048576) -Option Constant
 
 function Remove-Temp {
 	param (
-		$TempDir
+		[string] $TempDir
 	)
 
 	if (Test-Path $TempDir) {
@@ -79,12 +81,40 @@ function Write-ExitTimer {
 	exit
 }
 
-function Convert-BytesToMebibytesInt {
+function Get-DecimalsAndUnitIndex {
 	param (
-		$Bytes
+		[double] $Bytes
 	)
 
-	return [System.Math]::Floor($Bytes / 1048576)
+	# 2: MiB; 1: KiB; 0: B
+	$unitIndex = 3
+
+	# Return no decimals and bytes unit index if bytes less than 1 KiB
+	if ($Bytes -ge $dataDividends[1]) {
+		# Determine the appropriate number of decimals and unit index
+		while ($unitIndex-- -gt 0) {
+			$convertedBytes = $Bytes / $dataDividends[$unitIndex]
+			$decimals = 3 - [System.Math]::Round($convertedBytes).ToString().Length
+
+			if ([System.Math]::Floor($convertedBytes) -gt 0) {
+				return $decimals, $unitIndex
+			}
+		}
+	}
+
+	return 0, 0
+}
+
+function Get-ConvertedBytesString {
+	param (
+		[double] $Bytes,
+		[int] $Decimals,
+		[string] $UnitIndex
+	)
+
+	$convertedBytes = [System.Math]::Round(($Bytes / $dataDividends[$UnitIndex]), $Decimals)
+
+	return $convertedBytes.ToString("0.$('0' * $Decimals)")
 }
 
 function Close-Stream {
@@ -115,7 +145,7 @@ function Get-WebFile {
 
 		$response = $request.GetResponse()
 
-		$totalLengthMiB = Convert-BytesToMebibytesInt $response.get_ContentLength()
+		$totalBytes = $response.get_ContentLength()
 
 		$responseStream = $response.GetResponseStream()
 
@@ -123,27 +153,29 @@ function Get-WebFile {
 
 		$buffer = New-Object byte[] 10KB
 
-		$count = $responseStream.Read($buffer, 0, $buffer.Length)
-
-		$downloadedB = $count
+		$downloadedBytes = 0
 
 		$activity = "Downloading file `"$($url -split "/" | Select-Object -Last 1)`" to `"$($TargetPath)`"..."
 
-		while ($count -gt 0) {
-			$targetStream.Write($buffer, 0, $count)
+		$decimals, $unitIndex = Get-DecimalsAndUnitIndex $totalBytes
+
+		$totalString = Get-ConvertedBytesString $totalBytes $decimals $unitIndex
+
+		do {
+			$downloadedString = Get-ConvertedBytesString $downloadedBytes $decimals $unitIndex
+
+			$status = "Downloaded $($downloadedString) of $($totalString) $($dataUnits[$unitIndex])"
+
+			$percentComplete = ($downloadedBytes / $totalBytes) * 100
+
+			Write-Progress -Activity $activity -Status $status -PercentComplete $percentComplete
 
 			$count = $responseStream.Read($buffer, 0, $buffer.Length)
 
-			$downloadedB += $count
+			$targetStream.Write($buffer, 0, $count)
 
-			$downloadedMiB = Convert-BytesToMebibytesInt $downloadedB
-
-			$status = "Downloaded $($downloadedMiB) of $($totalLengthMiB) MB"
-
-			$percentComplete = ($downloadedMiB / $totalLengthMiB) * 100
-
-			Write-Progress -Activity $activity -Status $status -PercentComplete $percentComplete
-		}
+			$downloadedBytes += $count
+		} while ($count -gt 0)
 
 		Close-Stream $targetStream $responseStream
 
@@ -187,7 +219,7 @@ function Show-LoadingAnimation {
 		}
 	}
 
-	# Backspace and overwrite loading character with a space once job is complete
+	# Backspace and overwrite loading character with a space once process is complete
 	Write-Host "`b "
 }
 
@@ -269,11 +301,10 @@ function Get-DriverLookupParameters {
 	try {
 		$gpuData = Invoke-RestMethod -Uri "$($rawDataRepo)/$($dataRepoGpuDataFile)"
 
-		if ($Desktop -or !$IsNotebook) {
+		if (!$Notebook -and ($Desktop -or !$IsNotebook)) {
 			$gpuId = $gpuData."desktop".$GpuName
 		}
-
-		if ($Notebook -or $IsNotebook) {
+		else {
 			$gpuId = $gpuData."notebook".$GpuName
 		}
 	}
