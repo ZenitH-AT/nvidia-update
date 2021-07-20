@@ -1,5 +1,5 @@
 <#PSScriptInfo
-.VERSION 1.2
+.VERSION 1.3
 .GUID 544ddf4b-d7df-44b2-abcf-f452793c0fa7
 .AUTHOR ZenitH-AT
 .LICENSEURI https://raw.githubusercontent.com/ZenitH-AT/nvidia-update/master/LICENSE
@@ -12,7 +12,7 @@ New-Variable -Name "rawScriptRepo" -Value "https://raw.githubusercontent.com/Zen
 
 function Write-ExitError {
 	param (
-		[string] $ErrorMessage
+		[Parameter(Mandatory)] [ValidateNotNullOrEmpty()] [string] $ErrorMessage
 	)
 
 	Write-Host -ForegroundColor Yellow $ErrorMessage
@@ -24,7 +24,7 @@ function Write-ExitError {
 }
 
 ## Check internet connection
-if (!(Get-NetRoute | Where-Object DestinationPrefix -eq "0.0.0.0/0" | Get-NetIPInterface | Where-Object ConnectionState -eq "Connected")) {
+if (-not (Get-NetRoute | Where-Object DestinationPrefix -eq "0.0.0.0/0" | Get-NetIPInterface | Where-Object ConnectionState -eq "Connected")) {
 	Write-ExitError "No internet connection. After resolving connectivity issues, please try running this script again."
 }
 
@@ -92,7 +92,7 @@ else {
 $decision = $Host.UI.PromptForChoice("", "`nWould you like to run nvidia-update?", ("&Yes", "&No"), 0)
 
 if ($decision -eq 0) {
-	Start-Process PowerShell $taskPath
+	Start-Process -FilePath "powershell" -ArgumentList "-File `"$($taskPath)`""
 }
 
 Write-Host "`nExiting script in 5 seconds..."
