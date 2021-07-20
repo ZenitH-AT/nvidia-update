@@ -64,9 +64,11 @@ Q. How does the script check for the latest driver version?
 - Implemented a function for downloading files (Get-WebFile).
 - Driver downloading now uses a custom Get-WebFile function (instead of Start-BitsTransfer, which occasionally caused issues).
 - Greatly improved error handling (script is now hopefully idiot-proof).
-- Loading animations are shown where applicable (e.g. "Installing driver... /")
+- Loading animations are shown where applicable (e.g. "Installing driver... /").
 - Refactored and reorganised a ton of the code.
 
 ## ZenitH-AT's planned changes
 
 - 7-Zip download should get the URL of the latest version instead of using a predefined URL.
+- An optional parameter to enable MSI mode should be added.
+- Optional components should be selected from within the script and handle dependencies, like NVCleanstall.
