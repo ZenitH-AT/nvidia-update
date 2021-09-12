@@ -1,6 +1,6 @@
 # nvidia-update (ZenitH-AT fork)
 
-Checks for a new version of the NVIDIA Driver, downloads and installs it. Windows 10 only.
+Checks for a new version of the NVIDIA Driver, downloads and installs it. Windows 10+ only.
 
 ## Usage
 
@@ -12,7 +12,8 @@ Checks for a new version of the NVIDIA Driver, downloads and installs it. Window
 ### Optional parameters
 
 - `-Clean` - Delete the existing driver and install the latest one
-- `-Schedule` - Register a scheduled task to periodically run this script
+- `-Msi` - Enable message-signalled interrupts (MSI) for this update only; requires elevation
+- `-Schedule` - Register a scheduled task to periodically run this script; MSI will always be enabled if it "-Msi" was also set
 - `-Desktop` - Override the desktop/notebook check and download the desktop driver; useful when using an external GPU or unable to find a driver
 - `-Notebook` - Override the desktop/notebook check and download the notebook driver
 - `-Directory <string>` - The directory where the script will download and extract the driver
@@ -56,6 +57,8 @@ Q. How does the script check for the latest driver version?
 - Getting the download link now uses NVIDIA's AjaxDriverService. DCH drivers are now supported and there is no risk of the script not working if NVIDIA changes the download URL format. RP packages are not supported.
 - The GPU's product family ID (pfid) and operating system ID (osID) are now determined by reading files in the [ZenitH-AT/nvidia-data](https://github.com/ZenitH-AT/nvidia-data) repository, rather than using static values, as older GPUs may use different drivers.
 - The user can now choose what optional driver components to include in the installation using the optional-components.cfg file.
+- The user can now enable message-signalled interrupts after driver installation by setting the "-Msi" optional parameter.
+- Simplified and improved checking whether to use the desktop or notebook driver and implemented parameters to override the check.
 - Simplified and improved the archiver program check, download and installation.
 - Simplified the OS version and architecture (osBits) check and driver version comparison.
 - Simplified the GPU name and driver version retrieval (Get-GpuData).
@@ -70,5 +73,5 @@ Q. How does the script check for the latest driver version?
 ## ZenitH-AT's planned changes
 
 - 7-Zip download should get the URL of the latest version instead of using a predefined URL.
-- An optional parameter to enable MSI mode should be added.
 - Optional components should be selected from within the script and handle dependencies, like NVCleanstall.
+	- Dependencies can be determined by recursively reading `.nvi` files

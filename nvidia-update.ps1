@@ -1,5 +1,5 @@
 <#PSScriptInfo
-.VERSION 1.11
+.VERSION 1.12
 .GUID dd04650b-78dc-4761-89bf-b6eeee74094c
 .AUTHOR ZenitH-AT
 .LICENSEURI https://raw.githubusercontent.com/ZenitH-AT/nvidia-update/master/LICENSE
@@ -8,10 +8,11 @@
 #>
 param (
 	[switch] $Clean = $false, # Delete the existing driver and install the latest one
-	[switch] $Schedule = $false, # Register a scheduled task to periodically run this script
-	[switch] $Desktop = $false, # Override the desktop/notebook check and download the desktop driver; useful when using an external GPU
+	[switch] $Msi = $false, # Enable message-signalled interrupts (MSI) for this update only; requires elevation
+	[switch] $Schedule = $false, # Register a scheduled task to periodically run this script; MSI will always be enabled if it "-Msi" was also set
+	[switch] $Desktop = $false, # Override the desktop/notebook check and download the desktop driver; useful when using an external GPU or unable to find a driver
 	[switch] $Notebook = $false, # Override the desktop/notebook check and download the notebook driver
-	[string] $Directory = "$($env:TEMP)" # The directory where the script will download and extract the driver
+	[string] $Directory = "$($env:TEMP)\NVIDIA" # The directory where the script will download and extract the driver
 )
 
 ## Constant variables and functions
@@ -25,8 +26,8 @@ New-Variable -Name "rawDataRepo" -Value "https://raw.githubusercontent.com/Zenit
 New-Variable -Name "dataRepoGpuDataFile" -Value "gpu-data.json" -Option Constant
 New-Variable -Name "dataRepoOsDataFile" -Value "os-data.json" -Option Constant
 New-Variable -Name "osBits" -Value "$(if ([Environment]::Is64BitOperatingSystem) { 64 } else { 32 })" -Option Constant
-New-Variable -Name "dataUnits" -Value @("B", "KiB", "MiB") -Option Constant
 New-Variable -Name "dataDividends" -Value @(1, 1024, 1048576) -Option Constant
+New-Variable -Name "dataUnits" -Value @("B", "KiB", "MiB") -Option Constant
 
 function Exit-Script {
 	$host.UI.RawUI.WindowTitle = $originalWindowTitle
@@ -34,25 +35,20 @@ function Exit-Script {
 }
 
 function Remove-Temp {
-	param (
-		[Parameter(Mandatory)] [ValidateNotNullOrEmpty()] [string] $TempDir
-	)
-
-	if (Test-Path $TempDir) {
+	if (Test-Path $Directory) {
 		try {
-			Remove-Item $TempDir -Recurse -Force -ErrorAction Ignore
+			Remove-Item $Directory -Recurse -Force -ErrorAction Ignore
 		}
 		catch {
-			Write-Host "Some files located at $($TempDir) could not be deleted, you may want to remove them manually later." -ForegroundColor Gray
+			Write-Host "Some files located at $($Directory) could not be deleted, you may want to remove them manually later." -ForegroundColor Gray
 		}
 	}
 }
 
 function Write-ExitError {
 	param (
-		[Parameter(Position=0, ParameterSetName="set1", Mandatory)] [ValidateNotNullOrEmpty()] [string] $ErrorMessage,
-		[Parameter(Position=1, ParameterSetName="set2")] [ValidateNotNullOrEmpty()] [switch] $RemoveTemp,
-		[Parameter(Position=2, ParameterSetName="set2", Mandatory)] [ValidateNotNullOrEmpty()] [string] $TempDir
+		[Parameter(Position = 0, Mandatory)] [ValidateNotNullOrEmpty()] [string] $ErrorMessage,
+		[Parameter(Position = 1)] [switch] $RemoveTemp
 	)
 
 	Write-Host $ErrorMessage -ForegroundColor Yellow
@@ -60,7 +56,7 @@ function Write-ExitError {
 	if ($RemoveTemp) {
 		Write-Host "`nRemoving temporary files..."
 
-		Remove-Temp $TempDir
+		Remove-Temp $Directory
 
 		# Only write new line after any potential error message from Remove-Temp
 		Write-Host
@@ -117,9 +113,9 @@ function Get-DecimalsAndUnitIndex {
 
 function Get-ConvertedBytesString {
 	param (
-		[Parameter(Position=0, Mandatory)] [ValidateNotNullOrEmpty()] [double] $Bytes,
-		[Parameter(Position=1, Mandatory)] [ValidateNotNullOrEmpty()] [int] $Decimals,
-		[Parameter(Position=2, Mandatory)] [ValidateNotNullOrEmpty()] [string] $UnitIndex
+		[Parameter(Position = 0, Mandatory)] [ValidateNotNullOrEmpty()] [double] $Bytes,
+		[Parameter(Position = 1, Mandatory)] [ValidateNotNullOrEmpty()] [int] $Decimals,
+		[Parameter(Position = 2, Mandatory)] [ValidateNotNullOrEmpty()] [string] $UnitIndex
 	)
 
 	$convertedBytes = [System.Math]::Round(($Bytes / $dataDividends[$UnitIndex]), $Decimals)
@@ -127,82 +123,134 @@ function Get-ConvertedBytesString {
 	return $convertedBytes.ToString("0.$("0" * $Decimals)")
 }
 
-function Close-Stream {
-	param (
-		[Parameter(Position=0, Mandatory)] [ValidateNotNullOrEmpty()] $TargetStream,
-		[Parameter(Position=1, Mandatory)] [ValidateNotNullOrEmpty()] $ResponseStream
-	)
-
-	$TargetStream.Flush()
-	$TargetStream.Close()
-	$TargetStream.Dispose()
-	$ResponseStream.Dispose()
-}
-
 function Get-WebFile {
 	param (
-		[Parameter(Position=0, Mandatory)] [ValidateNotNullOrEmpty()] [string] $Url,
-		[Parameter(Position=1, Mandatory)] [ValidateNotNullOrEmpty()] [string] $TargetPath,
-		[Parameter(Position=2)] [ValidateNotNullOrEmpty()] [int] $Timeout = 15000, # 15 seconds
-		[Parameter(Position=3)] [ValidateNotNullOrEmpty()] [int] $BufferLength = 10240 # 10 KiB
+		[Parameter(Position = 0, Mandatory)] [ValidateNotNullOrEmpty()] [string] $Url,
+		[Parameter(Position = 1, Mandatory)] [ValidateNotNullOrEmpty()] [string] $TargetPath
 	)
 
-	try {
-		$uri = New-Object System.Uri $Url
+	# Create runspace pool and runspace for download
+	$pool = [RunspaceFactory]::CreateRunspacePool(1, [int]$env:NUMBER_OF_PROCESSORS + 1)
+		
+	$pool.ApartmentState = "MTA"
+	$pool.Open()
 
-		$request = [System.Net.HttpWebRequest]::Create($uri)
+	$runspace = [PowerShell]::Create()
 
-		$request.set_Timeout($Timeout)
+	$runspace.RunspacePool = $pool
 
-		$response = $request.GetResponse()
+	# Handle download in a script block
+	$totalBytes = $false
+	$downloadedBytes = 0
+	$downloadHadError = $false
 
-		$totalBytes = $response.get_ContentLength()
+	$scriptBlock = {
+		param (
+			[Parameter(Position = 0, Mandatory)] [ValidateNotNullOrEmpty()] [string] $Url,
+			[Parameter(Position = 1, Mandatory)] [ValidateNotNullOrEmpty()] [string] $TargetPath,
+			[Parameter(Position = 2, Mandatory)] [ValidateNotNullOrEmpty()] [ref] [int] $TotalBytes,
+			[Parameter(Position = 3, Mandatory)] [ValidateNotNullOrEmpty()] [ref] [int] $DownloadedBytes,
+			[Parameter(Position = 4, Mandatory)] [ValidateNotNullOrEmpty()] [ref] [bool] $DownloadHadError
+		)
 
-		$responseStream = $response.GetResponseStream()
+		try {
+			$uri = New-Object -TypeName "System.Uri" $Url
 
-		$targetStream = New-Object -TypeName System.IO.FileStream -ArgumentList $TargetPath, Create
+			$request = [System.Net.HttpWebRequest]::Create($uri)
 
-		$buffer = New-Object byte[] $BufferLength
+			$request.set_Timeout(15000) # 15 seconds
 
-		$downloadedBytes = 0
+			$response = $request.GetResponse()
 
-		$activity = "Downloading file `"$($Url -split "/" | Select-Object -Last 1)`" to `"$($TargetPath)`"..."
+			$TotalBytes.Value = $response.get_ContentLength()
 
-		$decimals, $unitIndex = Get-DecimalsAndUnitIndex $totalBytes
+			$responseStream = $response.GetResponseStream()
 
-		$totalString = Get-ConvertedBytesString $totalBytes $decimals $unitIndex
+			$targetStream = New-Object -TypeName "System.IO.FileStream" -ArgumentList $TargetPath, Create
 
-		do {
-			$downloadedString = Get-ConvertedBytesString $downloadedBytes $decimals $unitIndex
+			$buffer = New-Object byte[] 10240 # 10 KiB
 
-			$status = "Downloaded $($downloadedString) of $($totalString) $($dataUnits[$unitIndex])"
+			do {
+				$count = $responseStream.Read($buffer, 0, $buffer.Length)
 
-			$percentComplete = ($downloadedBytes / $totalBytes) * 100
+				$targetStream.Write($buffer, 0, $count)
 
-			Write-Progress -Activity $activity -Status $status -PercentComplete $percentComplete
+				$DownloadedBytes.Value += $count
 
-			$count = $responseStream.Read($buffer, 0, $buffer.Length)
-
-			$targetStream.Write($buffer, 0, $count)
-
-			$downloadedBytes += $count
-		} while ($count -gt 0)
-
-		Close-Stream $targetStream $responseStream
-
-		Write-Progress -Activity $activity -Completed
-	}
-	catch {
-		# Remove partially downloaded file if present
-		if (Test-Path $TargetPath) {
-			if ($targetStream -and $responseStream) {
-				Close-Stream $targetStream $responseStream
+				# TODO: Stop download if parent process ended
+			} while ($count -gt 0)
+		}
+		catch {
+			$DownloadHadError.Value = $true
+		}
+		finally {
+			# Close streams and exit (complete runspace)
+			if ($responseStream) {
+				$responseStream.Dispose()
 			}
 
+			if ($targetStream) {
+				$targetStream.Flush()
+				$targetStream.Close()
+				$targetStream.Dispose()
+			}
+
+			exit
+		}
+	}
+
+	$runspace.AddScript($scriptblock) > $null
+	$runspace.AddArgument($Url) > $null
+	$runspace.AddArgument($TargetPath) > $null
+	$runspace.AddArgument([ref]$totalBytes) > $null
+	$runspace.AddArgument([ref]$downloadedBytes) > $null
+	$runspace.AddArgument([ref]$downloadHadError) > $null
+
+	$download = [PSCustomObject]@{ Status = $runspace.BeginInvoke() }
+
+	# Wait for total bytes to be set in script block; timeout being reached in script block will cause exception and completed status
+	while (-not $totalBytes) {
+		Start-Sleep -Milliseconds 100
+
+		if ($downloadHadError) {
+			break
+		}
+	}
+
+	# Check and display download progress every 200 milliseconds until runspace completion
+	$activity = "Downloading file `"$($Url -split "/" | Select-Object -Last 1)`" to `"$($TargetPath)`"..."
+
+	$decimals, $unitIndex = Get-DecimalsAndUnitIndex $totalBytes
+
+	$totalString = Get-ConvertedBytesString $totalBytes $decimals $unitIndex
+
+	while ($download.Status.IsCompleted -eq $false) {
+		$downloadedString = Get-ConvertedBytesString $downloadedBytes $decimals $unitIndex
+
+		$status = "Downloaded $($downloadedString) of $($totalString) $($dataUnits[$unitIndex])"
+
+		$percentComplete = ($downloadedBytes / $totalBytes) * 100
+
+		Write-Progress -Activity $activity -Status $status -PercentComplete $percentComplete
+
+		Start-Sleep -Milliseconds 200
+	}
+
+	Write-Progress -Activity $activity -Completed
+
+	# Dispose of runspace pool
+	$pool.Close()
+	$pool.Dispose()
+
+	# Show error and exit if download failed
+	if ($downloadHadError) {
+		# Remove partially downloaded file if present
+		if (Test-Path $TargetPath) {
 			Remove-Item $TargetPath -Force
 		}
 
-		Write-ExitError "`nDownload failed. Please try running this script again."
+		Write-Time
+		Write-ExitError "Download failed. Please try running this script again."
 	}
 }
 
@@ -236,10 +284,10 @@ function Show-LoadingAnimation {
 
 function Start-Installation {
 	param (
-		[Parameter(Position=0, Mandatory)] [ValidateNotNullOrEmpty()] [string] $FilePath,
-		[Parameter(Position=1, Mandatory)] [ValidateNotNullOrEmpty()] [string] $ArgumentList,
-		[Parameter(Position=2, Mandatory)] [ValidateNotNullOrEmpty()] [string] $InstallingMessage,
-		[Parameter(Position=3, Mandatory)] [ValidateNotNullOrEmpty()] [string] $ErrorMessage
+		[Parameter(Position = 0, Mandatory)] [ValidateNotNullOrEmpty()] [string] $FilePath,
+		[Parameter(Position = 1, Mandatory)] [ValidateNotNullOrEmpty()] [string] $ArgumentList,
+		[Parameter(Position = 2, Mandatory)] [ValidateNotNullOrEmpty()] [string] $InstallingMessage,
+		[Parameter(Position = 3, Mandatory)] [ValidateNotNullOrEmpty()] [string] $ErrorMessage
 	)
 
 	do {
@@ -271,9 +319,10 @@ function Start-Installation {
 }
 
 function Get-GpuData {
-	$gpus = @(Get-CimInstance Win32_VideoController | Select-Object Name, DriverVersion)
+	$gpus = @(Get-CimInstance Win32_VideoController | Select-Object PNPDeviceID, Name, DriverVersion)
 
 	foreach ($gpu in $gpus) {
+		$pnpDeviceId = $gpu.PNPDeviceID
 		$gpuName = $gpu.Name
 
 		if ($gpuName -match "^NVIDIA") {
@@ -300,13 +349,13 @@ function Get-GpuData {
 		Write-ExitError "`nUnable to detect a compatible NVIDIA device."
 	}
 
-	return $gpuName, $currentDriverVersion, $isNotebook
+	return $pnpDeviceId, $gpuName, $currentDriverVersion, $isNotebook
 }
 
 function Get-DriverLookupParameters {
 	param (
-		[Parameter(Position=0, Mandatory)] [ValidateNotNullOrEmpty()] [string] $GpuName,
-		[Parameter(Position=1, Mandatory)] [ValidateNotNullOrEmpty()] [bool] $IsNotebook
+		[Parameter(Position = 0, Mandatory)] [ValidateNotNullOrEmpty()] [string] $GpuName,
+		[Parameter(Position = 1, Mandatory)] [ValidateNotNullOrEmpty()] [bool] $IsNotebook
 	)
 
 	# Determine product family (GPU) ID
@@ -364,9 +413,9 @@ function Get-DriverLookupParameters {
 
 function Get-DriverDownloadInfo {
 	param (
-		[Parameter(Position=0, Mandatory)] [ValidateNotNullOrEmpty()] [string] $GpuId,
-		[Parameter(Position=1, Mandatory)] [ValidateNotNullOrEmpty()] [string] $OsId,
-		[Parameter(Position=2, Mandatory)] [ValidateNotNullOrEmpty()] [string] $Dch
+		[Parameter(Position = 0, Mandatory)] [ValidateNotNullOrEmpty()] [string] $GpuId,
+		[Parameter(Position = 1, Mandatory)] [ValidateNotNullOrEmpty()] [string] $OsId,
+		[Parameter(Position = 2, Mandatory)] [ValidateNotNullOrEmpty()] [string] $Dch
 	)
 
 	$request = "https://gfwsl.geforce.com/services_toolkit/services/com/nvidia/services/AjaxDriverService.php?"
@@ -387,14 +436,23 @@ function Get-DriverDownloadInfo {
 	}
 }
 
-## Register scheduled task if the $Schedule parameter is set
+## Set window title
+$host.UI.RawUI.WindowTitle = $scriptPath -split "\\" | Select-Object -Last 1
+
+## Register scheduled task if the "-Schedule" parameter is set
 if ($Schedule) {
 	$taskName = "nvidia-update $($currentScriptVersion)"
 	$description = "NVIDIA Driver Update"
 	$scheduleDay = "Sunday"
 	$scheduleTime = "12pm"
+	$actionArgument = "-File `"$($scriptPath)`""
+	
+	# Enable message-signalled interrupts on sheduled driver updates if the "-Msi" parameter is also set
+	if ($Msi) {
+		$actionArgument += " -Msi"
+	}
 
-	$action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument $scriptPath
+	$action = New-ScheduledTaskAction -Execute "powershell" -Argument $actionArgument
 	$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -RunOnlyIfIdle -IdleDuration 00:10:00 -IdleWaitTimeout 04:00:00
 	$trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek $scheduleDay -At $scheduleTime
 
@@ -420,8 +478,15 @@ if ($Schedule) {
 	Write-Host "This script is scheduled to run every $($scheduleDay) at $($scheduleTime).`n"
 }
 
-## Set window title
-$host.UI.RawUI.WindowTitle = $scriptPath -split "\\" | Select-Object -Last 1
+if ($Msi) {
+	if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+		if ([int](Get-CimInstance -Class Win32_OperatingSystem | Select-Object -ExpandProperty BuildNumber) -ge 6000) {
+			Write-Host "This script must be run as administrator for message-signalled interrupts to be enabled after driver installation. MSI will not be enabled.`n" -ForegroundColor Gray
+			
+			$Msi = $false
+		}
+	}
+}
 
 ## Check internet connection
 if (-not (Get-NetRoute | Where-Object DestinationPrefix -eq "0.0.0.0/0" | Get-NetIPInterface | Where-Object ConnectionState -eq "Connected")) {
@@ -509,15 +574,13 @@ else {
 
 		if ($decision -eq 0) {
 			# Download 7-Zip to temporary folder and silently install
+			# TODO: Get URL of latest version dynamically
 			if ($osBits -eq "64") {
 				$archiverUrl = "https://www.7-zip.org/a/7z1900-x64.exe"
 			}
 			else {
 				$archiverUrl = "https://www.7-zip.org/a/7z1900.exe"
 			}
-
-			# TODO: winget rest api call
-			# $archiverUrl = (Invoke-RestMethod -Uri "saodnasodasd$($osBits)").downloadurl
 
 			$dlArchiverPath = "$($env:TEMP)\7z1900-x64.exe"
 
@@ -555,7 +618,7 @@ else {
 try {
 	Write-Host "`nDetecting GPU and driver version information..."
 
-	$gpuName, $currentDriverVersion, $isNotebook = Get-GpuData
+	$pnpDeviceId, $gpuName, $currentDriverVersion, $isNotebook = Get-GpuData
 
 	Write-Host "`n`tDetected graphics card name:`t$($gpuName)"
 	Write-Host "`tCurrent driver version:`t`t$($currentDriverVersion)"
@@ -577,8 +640,7 @@ if (-not $Clean -and ($currentDriverVersion -eq $latestDriverVersion)) {
 }
 
 ## Create temporary folder and download the installer
-$tempDir = "$($Directory)\NVIDIA"
-$dlDriverPath = "$($tempDir)\$($latestDriverVersion).exe"
+$dlDriverPath = "$($Directory)\$($latestDriverVersion).exe"
 
 Write-Host "`nReady to download the latest driver installer to `"$($dlDriverPath)`"..."
 
@@ -586,14 +648,14 @@ $decision = $Host.UI.PromptForChoice("", "`nDo you want to download and install 
 
 if ($decision -eq 0) {
 	# Remove existing temporary folder if present
-	Remove-Temp $tempDir
+	Remove-Temp $Directory
 
-	New-Item -Path $tempDir -ItemType "directory" > $null
+	New-Item -Path $Directory -ItemType "directory" > $null
 
 	Write-Time
 	Write-Host "Downloading latest driver installer..."
 
-	Get-WebFile $driverDownloadInfo.DownloadURL $dlDriverPath 15000 1048576
+	Get-WebFile $driverDownloadInfo.DownloadURL $dlDriverPath
 }
 else {
 	Write-Time
@@ -601,7 +663,7 @@ else {
 }
 
 ## Extract setup files
-$extractDir = "$($tempDir)\$($latestVersion)"
+$extractDir = "$($Directory)\$($latestVersion)"
 
 Write-Time
 Write-Host "Extracting driver files..."
@@ -609,7 +671,7 @@ Write-Host "Extracting driver files..."
 $filesToExtract = "Display.Driver NVI2 EULA.txt ListDevices.txt setup.cfg setup.exe"
 
 if (Test-Path "$($PSScriptRoot)\optional-components.cfg") {
-	Get-Content "$($PSScriptRoot)\optional-components.cfg" | Where-Object { $_ -match "^[^\/]+" } | ForEach-Object {
+	Get-Content -Path "$($PSScriptRoot)\optional-components.cfg" | Where-Object { $_ -match "^[^\/]+" } | ForEach-Object {
 		$filesToExtract += " $($_)"
 	}
 }
@@ -621,7 +683,7 @@ elseif ($archiverProgram -eq $winrarpath) {
 	Start-Process -FilePath $archiverProgram -NoNewWindow -ArgumentList "x $($dlDriverPath) $($extractDir) -IBCK $($filesToExtract)" -Wait
 }
 else {
-	Write-ExitError "`nNo archive program detected. This should not happen." -RemoveTemp $tempDir
+	Write-ExitError "`nNo archive program detected. This should not happen." -RemoveTemp
 }
 
 ## Remove unnecessary dependencies from setup.cfg
@@ -629,7 +691,7 @@ try {
 	Set-Content -Path "$($extractDir)\setup.cfg" -Value (Get-Content -Path "$($extractDir)\setup.cfg" | Select-String -Pattern 'name="\${{(EulaHtmlFile|FunctionalConsentFile|PrivacyPolicyFile)}}' -notmatch)
 }
 catch {
-	Write-ExitError "`nUnable to remove unnecessary dependencies from `"setup.cfg`" because it is being used by another process.`nPlease close any conflicting program and try again." -RemoveTemp $tempDir
+	Write-ExitError "`nUnable to remove unnecessary dependencies from `"setup.cfg`" because it is being used by another process.`nPlease close any conflicting program and try again." -RemoveTemp
 }
 
 ## Install driver
@@ -647,13 +709,26 @@ $cancelled = Start-Installation "$($extractDir)\setup.exe" $argumentList $instal
 
 if ($cancelled) {
 	Write-Time
-	Write-ExitError "Driver installation cancelled." -RemoveTemp $tempDir
+	Write-ExitError "Driver installation cancelled." -RemoveTemp
 }
 
 ## Remove temporary (downloaded) files
 Write-Host "`nRemoving temporary files..."
 
-Remove-Temp $tempDir
+Remove-Temp
+
+## Enable message-signalled interrupts if the "-Msi" parameter is set
+if ($Msi) {
+	Write-Host "`nEnabling message-signalled interrupts..."
+
+	$regPath = "HKLM:\SYSTEM\CurrentControlSet\Enum\$($pnpDeviceId)\Device Parameters\Interrupt Management\MessageSignaledInterruptProperties"
+
+	if (-not (Test-Path $regPath)) {
+		New-Item -Path $regPath > $null
+	}
+
+	Set-ItemProperty -Path $regPath -Name "MSISupported" -Value 1
+}
 
 ## Driver installed; offer a reboot
 Write-Time
@@ -664,9 +739,9 @@ $decision = $Host.UI.PromptForChoice("", "`nDo you want to reboot?", ("&Yes", "&
 
 if ($decision -eq 0) {
 	Write-host "`nRebooting now..."
-	
+
 	Start-Sleep -Milliseconds 2000
-	
+
 	Restart-Computer
 }
 else {
