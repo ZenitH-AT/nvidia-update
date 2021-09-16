@@ -13,7 +13,7 @@ Checks for a new version of the NVIDIA Driver, downloads and installs it. Window
 
 - `-Clean` - Delete the existing driver and install the latest one
 - `-Msi` - Enable message-signalled interrupts (MSI) for this update only; requires elevation
-- `-Schedule` - Register a scheduled task to periodically run this script; MSI will always be enabled if it "-Msi" was also set
+- `-Schedule` - Register a scheduled task to periodically run this script; MSI will always be enabled if "-Msi" was also set
 - `-Desktop` - Override the desktop/notebook check and download the desktop driver; useful when using an external GPU or unable to find a driver
 - `-Notebook` - Override the desktop/notebook check and download the notebook driver
 - `-Directory <string>` - The directory where the script will download and extract the driver
