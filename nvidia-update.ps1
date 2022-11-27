@@ -360,7 +360,7 @@ function Get-DriverLookupParameters {
 
 	# Determine product family (GPU) ID
 	try {
-		$gpuData = Invoke-RestMethod -Uri "$($rawDataRepo)/$($dataRepoGpuDataFile)"
+		$gpuData = Invoke-RestMethod -Uri "$($rawDataRepo)/$($dataRepoGpuDataFile)" | ConvertFrom-Json -AsHashTable
 
 		if (-not $Notebook -and ($Desktop -or -not $IsNotebook)) {
 			$gpuId = $gpuData."desktop".$GpuName
