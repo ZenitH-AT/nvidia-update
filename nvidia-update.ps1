@@ -402,7 +402,7 @@ function Get-DriverLookupParameters {
 	# Check if using DCH driver
 	$dch = 0
 
-	if ($osVersion -eq 10.0) {
+	if ($osVersion -eq "10.0") {
 		if (Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\nvlddmkm" -Name "DCHUVen" -ErrorAction Ignore) {
 			$dch = 1
 		}
