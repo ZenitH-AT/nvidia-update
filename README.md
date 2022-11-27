@@ -1,10 +1,10 @@
-# nvidia-update (ZenitH-AT fork)
+# nvidia-update (ZenitH-AT fork) (Forked Again)
 
 Checks for a new version of the NVIDIA Driver, downloads and installs it. Windows 10+ only.
 
 ## Usage
 
-- Download the [latest release](https://github.com/ZenitH-AT/nvidia-update/releases/latest) or pull `nvidia-update.ps1` and `optional-components.cfg` (optional; allows the user to specify what optional components to include, such as PhysX)
+- Download the [latest release](https://github.com/asheingold/nvidia-update/releases/latest) or pull `nvidia-update.ps1` and `optional-components.cfg` (optional; allows the user to specify what optional components to include, such as PhysX)
 - If `optional-components.cfg` was downloaded, edit the file based on your preferences (similar to NVSlimmer; by default most components are commented out).
 - Right click `nvidia-update.ps1` and select `Run with PowerShell` (or run with optional parameters)
 - If the script finds a newer version of the NVIDIA driver, it will download and install a slimmed version of it.
@@ -75,3 +75,5 @@ Q. How does the script check for the latest driver version?
 - 7-Zip download should get the URL of the latest version instead of using a predefined URL.
 - Optional components should be selected from within the script and handle dependencies, like NVCleanstall.
 	- Dependencies can be determined by recursively reading `.nvi` files
+
+## ASheingold changes (Not Upstream Yet)
