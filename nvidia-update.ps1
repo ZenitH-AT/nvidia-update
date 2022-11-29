@@ -1,5 +1,5 @@
 <#PSScriptInfo
-.VERSION 1.13.1
+.VERSION 1.12
 .GUID dd04650b-78dc-4761-89bf-b6eeee74094c
 .AUTHOR ZenitH-AT
 .LICENSEURI https://raw.githubusercontent.com/ZenitH-AT/nvidia-update/master/LICENSE
@@ -8,29 +8,29 @@
 #>
 param (
 	[switch] $Clean = $false, # Delete the existing driver and install the latest one
-	[switch] $Msi = $false, # Enable message-signalled interrupts (MSI) after driver installation (must be enabled every time); requires elevation
-	[switch] $Schedule = $false, # Register a scheduled task to periodically run this script; arguments passed alongside this will be appended to the scheduled task
-	[string] $GpuId = $null, # Manually specify product family (GPU) ID rather than determine automatically
-	[string] $OsId = $null, # Manually specify operating system ID rather than determine automatically
+	[switch] $Msi = $false, # Enable message-signalled interrupts (MSI) for this update only; requires elevation
+	[switch] $Schedule = $false, # Register a scheduled task to periodically run this script; MSI will always be enabled if it "-Msi" was also set
 	[switch] $Desktop = $false, # Override the desktop/notebook check and download the desktop driver; useful when using an external GPU or unable to find a driver
 	[switch] $Notebook = $false, # Override the desktop/notebook check and download the notebook driver
 	[string] $Directory = "$($env:TEMP)\NVIDIA" # The directory where the script will download and extract the driver
 )
 
 ## Constant variables and functions
+New-Variable -Name "originalWindowTitle" -Value $host.UI.RawUI.WindowTitle
 New-Variable -Name "scriptPath" -Value $PSCommandPath -Option Constant
 New-Variable -Name "currentScriptVersion" -Value "$(Test-ScriptFileInfo -Path $scriptPath | ForEach-Object Version)" -Option Constant
 New-Variable -Name "rawScriptRepo" -Value "https://raw.githubusercontent.com/ZenitH-AT/nvidia-update/master" -Option Constant
 New-Variable -Name "scriptRepoVersionFile" -Value "version.txt" -Option Constant
 New-Variable -Name "scriptRepoScriptFile" -Value "nvidia-update.ps1" -Option Constant
-New-Variable -Name "gpuDataFileUrl" -Value "https://raw.githubusercontent.com/ZenitH-AT/nvidia-data/main/gpu-data.json" -Option Constant
-New-Variable -Name "osDataFileUrl" -Value "https://raw.githubusercontent.com/ZenitH-AT/nvidia-data/main/os-data.json" -Option Constant
-New-Variable -Name "wingetInstallerUrl" -Value "$((Invoke-RestMethod -Method Get -Uri `"https://api.github.com/repos/microsoft/winget-cli/releases/latest`" | ForEach-Object assets | Where-Object name -like `"*.msixbundle`").browser_download_url)" -Option Constant
+New-Variable -Name "rawDataRepo" -Value "https://raw.githubusercontent.com/ZenitH-AT/nvidia-data/main" -Option Constant
+New-Variable -Name "dataRepoGpuDataFile" -Value "gpu-data.json" -Option Constant
+New-Variable -Name "dataRepoOsDataFile" -Value "os-data.json" -Option Constant
 New-Variable -Name "osBits" -Value "$(if ([Environment]::Is64BitOperatingSystem) { 64 } else { 32 })" -Option Constant
 New-Variable -Name "dataDividends" -Value @(1, 1024, 1048576) -Option Constant
 New-Variable -Name "dataUnits" -Value @("B", "KiB", "MiB") -Option Constant
 
 function Exit-Script {
+	$host.UI.RawUI.WindowTitle = $originalWindowTitle
 	exit
 }
 
@@ -130,7 +130,7 @@ function Get-WebFile {
 	)
 
 	# Create runspace pool and runspace for download
-	$pool = [RunspaceFactory]::CreateRunspacePool(1, [Environment]::ProcessorCount + 1)
+	$pool = [RunspaceFactory]::CreateRunspacePool(1, [int]$env:NUMBER_OF_PROCESSORS + 1)
 		
 	$pool.ApartmentState = "MTA"
 	$pool.Open()
@@ -327,8 +327,8 @@ function Get-GpuData {
 
 		if ($gpuName -match "^NVIDIA") {
 			# Clean GPU name, accounting for card variants (e.g. 1060 6GB, 760Ti (OEM))
-			if ($gpuName -match "(?<=NVIDIA )(.*(?= [0-9]+GB)|.*(?= with Max-Q Design)|.*(?= \([A-Z]+\))|.*)") {
-				$gpuName = $Matches[0].Replace("Super", "SUPER").Trim()
+			if ($gpuName -match "(?<=NVIDIA )(.*(?= [0-9]+GB)|.*(?= \([A-Z]+\))|.*)") {
+				$gpuName = $Matches[0].Trim()
 			}
 			else {
 				Write-ExitError "`nUnrecognised GPU name $($gpuName). This should not happen."
@@ -358,22 +358,19 @@ function Get-DriverLookupParameters {
 		[Parameter(Position = 1, Mandatory)] [ValidateNotNullOrEmpty()] [bool] $IsNotebook
 	)
 
-	$gpuType = if (-not $Notebook -and ($Desktop -or -not $IsNotebook)) { "desktop" } else { "notebook" }
-
 	# Determine product family (GPU) ID
-	$gpuId = $GpuId # Initially assume user manually specified GPU ID
+	try {
+		$gpuData = Invoke-RestMethod -Uri "$($rawDataRepo)/$($dataRepoGpuDataFile)"
 
-	if (!$GpuId) {
-		try {
-			$gpuData = (Invoke-RestMethod -Uri $gpuDataFileUrl).$gpuType
-
-			if ($gpuData.ContainsKey($GpuName)) {
-				$gpuId = $gpuData.$GpuName
-			}
+		if (-not $Notebook -and ($Desktop -or -not $IsNotebook)) {
+			$gpuId = $gpuData."desktop".$GpuName
 		}
-		catch {
-			Write-ExitError "Unable to retrieve GPU data. Please try running this script again."
+		else {
+			$gpuId = $gpuData."notebook".$GpuName
 		}
+	}
+	catch {
+		Write-ExitError "Unable to retrieve GPU data. Please try running this script again."
 	}
 
 	if (-not $gpuId) {
@@ -384,21 +381,17 @@ function Get-DriverLookupParameters {
 	$osVersion = "$([Environment]::OSVersion.Version.Major).$([Environment]::OSVersion.Version.Minor)"
 
 	# Determine operating system ID
-	$osId = $OsId # Initially assume user manually specified OS ID
+	try {
+		$osData = Invoke-RestMethod -Uri "$($rawDataRepo)/$($dataRepoOsDataFile)"
+	}
+	catch {
+		Write-ExitError "Unable to retrieve OS data. Please try running this script again."
+	}
 
-	if (!$OsId) {
-		try {
-			$osData = Invoke-RestMethod -Uri $osDataFileUrl
-		}
-		catch {
-			Write-ExitError "Unable to retrieve OS data. Please try running this script again."
-		}
-
-		foreach ($os in $osData) {
-			if (($os.code -eq $osVersion) -and ($os.name -match $osBits)) {
-				$osId = $os.id
-				break
-			}
+	foreach ($os in $osData) {
+		if (($os.code -eq $osVersion) -and ($os.name -match $osBits)) {
+			$osId = $os.id
+			break
 		}
 	}
 
@@ -443,14 +436,23 @@ function Get-DriverDownloadInfo {
 	}
 }
 
+## Set window title
+$host.UI.RawUI.WindowTitle = $scriptPath -split "\\" | Select-Object -Last 1
+
 ## Register scheduled task if the "-Schedule" parameter is set
 if ($Schedule) {
 	$taskName = "nvidia-update $($currentScriptVersion)"
 	$description = "NVIDIA Driver Update"
 	$scheduleDay = "Sunday"
 	$scheduleTime = "12pm"
+	$actionArgument = "-File `"$($scriptPath)`""
+	
+	# Enable message-signalled interrupts on sheduled driver updates if the "-Msi" parameter is also set
+	if ($Msi) {
+		$actionArgument += " -Msi"
+	}
 
-	$action = New-ScheduledTaskAction -Execute "powershell" -Argument "-File `"$($scriptPath)`" $($MyInvocation.UnboundArguments)"
+	$action = New-ScheduledTaskAction -Execute "powershell" -Argument $actionArgument
 	$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -RunOnlyIfIdle -IdleDuration 00:10:00 -IdleWaitTimeout 04:00:00
 	$trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek $scheduleDay -At $scheduleTime
 
@@ -497,7 +499,8 @@ Write-Host "Checking for script update..."
 Write-Host "`n`tCurrent script version:`t`t$($currentScriptVersion)"
 
 try {
-	$latestScriptVersion = (Invoke-WebRequest -Uri "$($rawScriptRepo)/$($scriptRepoVersionFile)").Content.Trim()
+	$latestScriptVersion = Invoke-WebRequest -Uri "$($rawScriptRepo)/$($scriptRepoVersionFile)"
+	$latestScriptVersion = "$($latestScriptVersion)".Trim()
 
 	Write-Host "`tLatest script version:`t`t$($latestScriptVersion)"
 
@@ -558,7 +561,7 @@ if (Test-Path "HKLM:\SOFTWARE\7-Zip") {
 }
 else {
 	if (Test-Path "HKLM:\SOFTWARE\WinRAR") {
-		$winRarPath = Get-ItemPropertyValue -Path "HKLM:\SOFTWARE\WinRAR" -Name "exe64"
+		$winRarPath = Get-ItemProperty -Path "HKLM:\SOFTWARE\WinRAR" -Name "exe64"
 
 		if (Test-Path $winRarPath) {
 			$archiverProgram = $winRarPath
@@ -573,10 +576,10 @@ else {
 			# Download 7-Zip to temporary folder and silently install
 			# TODO: Get URL of latest version dynamically
 			if ($osBits -eq "64") {
-				$archiverUrl = "https://www.7-zip.org/a/7z2201-x64.exe"
+				$archiverUrl = "https://www.7-zip.org/a/7z1900-x64.exe"
 			}
 			else {
-				$archiverUrl = "https://www.7-zip.org/a/7z2201.exe"
+				$archiverUrl = "https://www.7-zip.org/a/7z1900.exe"
 			}
 
 			$dlArchiverPath = "$($env:TEMP)\7z1900-x64.exe"
@@ -676,7 +679,7 @@ if (Test-Path "$($PSScriptRoot)\optional-components.cfg") {
 if ($7zInstalled) {
 	Start-Process -FilePath $archiverProgram -NoNewWindow -ArgumentList "x -bso0 -bsp1 -bse1 -aoa $($dlDriverPath) $($filesToExtract) -o$($extractDir)" -Wait
 }
-elseif ($archiverProgram -eq $winRarPath) {
+elseif ($archiverProgram -eq $winrarpath) {
 	Start-Process -FilePath $archiverProgram -NoNewWindow -ArgumentList "x $($dlDriverPath) $($extractDir) -IBCK $($filesToExtract)" -Wait
 }
 else {
@@ -685,7 +688,7 @@ else {
 
 ## Remove unnecessary dependencies from setup.cfg
 try {
-	Set-Content -Path "$($extractDir)\setup.cfg" -Value (Get-Content -Path "$($extractDir)\setup.cfg" | Select-String -Pattern "name=`"\$`{{(EulaHtmlFile|FunctionalConsentFile|PrivacyPolicyFile)}}" -notmatch)
+	Set-Content -Path "$($extractDir)\setup.cfg" -Value (Get-Content -Path "$($extractDir)\setup.cfg" | Select-String -Pattern 'name="\${{(EulaHtmlFile|FunctionalConsentFile|PrivacyPolicyFile)}}' -notmatch)
 }
 catch {
 	Write-ExitError "`nUnable to remove unnecessary dependencies from `"setup.cfg`" because it is being used by another process.`nPlease close any conflicting program and try again." -RemoveTemp
