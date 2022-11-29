@@ -12,8 +12,10 @@ Checks for a new version of the NVIDIA Driver, downloads and installs it. Window
 ### Optional parameters
 
 - `-Clean` - Delete the existing driver and install the latest one
-- `-Msi` - Enable message-signalled interrupts (MSI) for this update only; requires elevation
+- `-Msi` - Enable message-signalled interrupts (MSI) after driver installation (must be enabled every time); requires elevation
 - `-Schedule` - Register a scheduled task to periodically run this script; MSI will always be enabled if "-Msi" was also set
+- `-GpuId` - Manually specify product family (GPU) ID rather than determine automatically
+- `-OsId` - Manually specify operating system ID rather than determine automatically
 - `-Desktop` - Override the desktop/notebook check and download the desktop driver; useful when using an external GPU or unable to find a driver
 - `-Notebook` - Override the desktop/notebook check and download the notebook driver
 - `-Directory <string>` - The directory where the script will download and extract the driver
@@ -36,26 +38,25 @@ Invoke-Expression (Invoke-WebRequest -Uri "https://github.com/ZenitH-AT/nvidia-u
 
 A supported archiver (7-Zip or WinRAR) is needed to extract the drivers.
 
-## FAQ
+## How does the script check for the latest driver version?
 
-Q. How does the script check for the latest driver version?
+It uses the NVIDIA [AjaxDriverService](https://gfwsl.geforce.com/services_toolkit/services/com/nvidia/services/AjaxDriverService.php).
 
-> It uses the NVIDIA [AjaxDriverService](https://gfwsl.geforce.com/services_toolkit/services/com/nvidia/services/AjaxDriverService.php).
->
-> Example:
->
-> ```https://gfwsl.geforce.com/services_toolkit/services/com/nvidia/services/AjaxDriverService.php?func=DriverManualLookup&pfid=877&osID=57&dch=1```
-> - **pfid**: Product Family (GPU) ID (e.g. _GeForce RTX 3070_: 933)
-> - **osID**: Operating System ID (e.g. _Windows 10 64-bit_: 57)
-> - **dch**: Windows Driver Type (_Standard_: 0; _DCH_: 1)
->
-> The pfid and osID are determined by reading files in the [ZenitH-AT/nvidia-data](https://github.com/ZenitH-AT/nvidia-data) repository, which queries the NVIDIA Download API ([lookupValueSearch](https://www.nvidia.com/Download/API/lookupValueSearch.aspx)).
+Example:
+
+```https://gfwsl.geforce.com/services_toolkit/services/com/nvidia/services/AjaxDriverService.php?func=DriverManualLookup&pfid=877&osID=57&dch=1```
+
+- **pfid**: Product Family (GPU) ID (e.g. _GeForce RTX 3070_: 933)
+- **osID**: Operating System ID (e.g. _Windows 10 64-bit_: 57)
+- **dch**: Windows Driver Type (_Standard_: 0; _DCH_: 1)
+
+The pfid and osID are determined by reading files in the [ZenitH-AT/nvidia-data](https://github.com/ZenitH-AT/nvidia-data) repository, which queries the NVIDIA Download API ([lookupValueSearch](https://www.nvidia.com/Download/API/lookupValueSearch.aspx)).
 
 ## ZenitH-AT's changes
 
 - The script can now self-update.
 - Getting the download link now uses NVIDIA's AjaxDriverService. DCH drivers are now supported and there is no risk of the script not working if NVIDIA changes the download URL format. RP packages are not supported.
-- The GPU's product family ID (pfid) and operating system ID (osID) are now determined by reading files in the [ZenitH-AT/nvidia-data](https://github.com/ZenitH-AT/nvidia-data) repository, rather than using static values, as older GPUs may use different drivers.
+- The GPU's product family ID (pfid) and operating system ID (osID) can now be determined by reading files in the [ZenitH-AT/nvidia-data](https://github.com/ZenitH-AT/nvidia-data) repository, rather than using static values, as older GPUs may use different drivers.
 - The user can now choose what optional driver components to include in the installation using the optional-components.cfg file.
 - The user can now enable message-signalled interrupts after driver installation by setting the "-Msi" optional parameter.
 - Simplified and improved checking whether to use the desktop or notebook driver and implemented parameters to override the check.
@@ -69,6 +70,7 @@ Q. How does the script check for the latest driver version?
 - Greatly improved error handling (script is now hopefully idiot-proof).
 - Loading animations are shown where applicable (e.g. "Installing driver... /").
 - Refactored and reorganised a ton of the code.
+- Implemented a few changes and fixes from the [BearGrylls](https://github.com/BearGrylls/nvidia-update) and [fl4pj4ck](https://github.com/fl4pj4ck/nvidia-update) forks (sorry for abandoning this repository for so long)
 
 ## ZenitH-AT's planned changes
 
