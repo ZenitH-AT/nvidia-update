@@ -1,6 +1,6 @@
 # nvidia-update (ZenitH-AT fork)
 
-Checks for a new version of the NVIDIA Driver, downloads and installs it. Windows 10+ and PowerShell 7+ only.
+Checks for a new version of the NVIDIA Driver, downloads and installs it. Windows 10+ only and PowerShell 7+ recommended.
 
 ## Usage
 

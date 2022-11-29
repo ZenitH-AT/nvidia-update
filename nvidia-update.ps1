@@ -1,5 +1,5 @@
 <#PSScriptInfo
-.VERSION 1.13.1
+.VERSION 1.13.2
 .GUID dd04650b-78dc-4761-89bf-b6eeee74094c
 .AUTHOR ZenitH-AT
 .LICENSEURI https://raw.githubusercontent.com/ZenitH-AT/nvidia-update/master/LICENSE
@@ -20,9 +20,8 @@ param (
 ## Constant variables and functions
 New-Variable -Name "scriptPath" -Value $PSCommandPath -Option Constant
 New-Variable -Name "currentScriptVersion" -Value "$(Test-ScriptFileInfo -Path $scriptPath | ForEach-Object Version)" -Option Constant
-New-Variable -Name "rawScriptRepo" -Value "https://raw.githubusercontent.com/ZenitH-AT/nvidia-update/master" -Option Constant
-New-Variable -Name "scriptRepoVersionFile" -Value "version.txt" -Option Constant
-New-Variable -Name "scriptRepoScriptFile" -Value "nvidia-update.ps1" -Option Constant
+New-Variable -Name "scriptVersionFileUrl" -Value "https://raw.githubusercontent.com/ZenitH-AT/nvidia-update/master/version.txt" -Option Constant
+New-Variable -Name "scriptFileUrl" -Value "https://raw.githubusercontent.com/ZenitH-AT/nvidia-update/master/nvidia-update.ps1" -Option Constant
 New-Variable -Name "gpuDataFileUrl" -Value "https://raw.githubusercontent.com/ZenitH-AT/nvidia-data/main/gpu-data.json" -Option Constant
 New-Variable -Name "osDataFileUrl" -Value "https://raw.githubusercontent.com/ZenitH-AT/nvidia-data/main/os-data.json" -Option Constant
 New-Variable -Name "osBits" -Value "$(if ([Environment]::Is64BitOperatingSystem) { 64 } else { 32 })" -Option Constant
@@ -337,7 +336,7 @@ function Get-GpuData {
 
 			# Determine if computer is a notebook to always download the correct driver,
 			# since some GPUs are present in both a desktop and notebook series (e.g. GeForce GTX 1050 Ti)
-			$isNotebook = [bool] (Get-CimInstance -ClassName Win32_SystemEnclosure).ChassisTypes.Where({ $_ -in @(9, 10, 14) })
+			$isNotebook = [bool](Get-CimInstance -ClassName Win32_SystemEnclosure).ChassisTypes.Where({ $_ -in @(9, 10, 14) })
 
 			$compatibleGpuFound = $true
 			break
@@ -364,11 +363,7 @@ function Get-DriverLookupParameters {
 
 	if (!$GpuId) {
 		try {
-			$gpuData = (Invoke-RestMethod -Uri $gpuDataFileUrl | ConvertFrom-Json -AsHashTable).$gpuType
-
-			if ($gpuData.ContainsKey($GpuName)) {
-				$gpuId = $gpuData.$GpuName
-			}
+			$gpuId = ((Invoke-RestMethod -Uri $gpuDataFileUrl).Replace("Super", "SUPER_") | ConvertFrom-Json).$gpuType.$GpuName
 		}
 		catch {
 			Write-ExitError "Unable to retrieve GPU data. Please try running this script again."
@@ -449,7 +444,7 @@ if ($Schedule) {
 	$scheduleDay = "Sunday"
 	$scheduleTime = "12pm"
 
-	$action = New-ScheduledTaskAction -Execute "powershell" -Argument "-File `"$($scriptPath)`" $($MyInvocation.UnboundArguments)"
+	$action = New-ScheduledTaskAction -Execute $powershellExe -Argument "-File `"$($scriptPath)`" $($MyInvocation.UnboundArguments)"
 	$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -RunOnlyIfIdle -IdleDuration 00:10:00 -IdleWaitTimeout 04:00:00
 	$trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek $scheduleDay -At $scheduleTime
 
@@ -457,10 +452,10 @@ if ($Schedule) {
 	$registerTask = $true
 
 	$existingTasks = Get-ScheduledTask | Where-Object TaskName -match "^nvidia-update."
-	
+
 	foreach ($existingTask in $existingTasks) {
 		$registerTask = $false
-	
+
 		if ($existingTask.TaskName -notlike "*$($currentScriptVersion)") {
 			Unregister-ScheduledTask -TaskName $existingTask.TaskName -Confirm:$false
 	
@@ -485,6 +480,9 @@ if ($Msi) {
 	}
 }
 
+## Get PowerShell executable
+$powershellExe = if ($PSVersionTable.PSVersion.Major -lt 6) { "powershell" } else { "pwsh" }
+
 ## Check internet connection
 if (-not (Get-NetRoute | Where-Object DestinationPrefix -eq "0.0.0.0/0" | Get-NetIPInterface | Where-Object ConnectionState -eq "Connected")) {
 	Write-ExitError "No internet connection. After resolving connectivity issues, please try running this script again."
@@ -496,7 +494,7 @@ Write-Host "Checking for script update..."
 Write-Host "`n`tCurrent script version:`t`t$($currentScriptVersion)"
 
 try {
-	$latestScriptVersion = (Invoke-WebRequest -Uri "$($rawScriptRepo)/$($scriptRepoVersionFile)").Content.Trim()
+	$latestScriptVersion = (Invoke-WebRequest -Uri $scriptVersionFileUrl).Content.Trim()
 
 	Write-Host "`tLatest script version:`t`t$($latestScriptVersion)"
 
@@ -515,7 +513,7 @@ try {
 
 			Write-Host "`nDownloading latest script file..."
 
-			Get-WebFile "$($rawScriptRepo)/$($scriptRepoScriptFile)" $dlScriptPath
+			Get-WebFile $scriptFileUrl $dlScriptPath
 
 			# Overwrite this script and delete temporary file
 			Copy-Item $dlScriptPath -Destination $scriptPath
@@ -525,7 +523,7 @@ try {
 			# Run new script with the same arguments; include -Schedule if a scheduled task is registered to update the task
 			$argumentList = "$($MyInvocation.UnboundArguments)$(if (Get-ScheduledTask | Where-Object TaskName -match "^nvidia-update.") { " -Schedule" })"
 
-			Start-Process -FilePath "powershell" -ArgumentList "-File `"$($scriptPath)`" $($argumentList)"
+			Start-Process -FilePath $powershellExe -ArgumentList "-File `"$($scriptPath)`" $($argumentList)"
 
 			Exit-Script
 		}

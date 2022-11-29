@@ -1,5 +1,5 @@
 <#PSScriptInfo
-.VERSION 1.3
+.VERSION 1.4
 .GUID 544ddf4b-d7df-44b2-abcf-f452793c0fa7
 .AUTHOR ZenitH-AT
 .LICENSEURI https://raw.githubusercontent.com/ZenitH-AT/nvidia-update/master/LICENSE
@@ -22,6 +22,9 @@ function Write-ExitError {
 
 	exit
 }
+
+## Get PowerShell executable
+$powershellExe = if ($PSVersionTable.PSVersion.Major -lt 6) { "powershell" } else { "pwsh" }
 
 ## Check internet connection
 if (-not (Get-NetRoute | Where-Object DestinationPrefix -eq "0.0.0.0/0" | Get-NetIPInterface | Where-Object ConnectionState -eq "Connected")) {
@@ -50,7 +53,7 @@ $description = "NVIDIA Driver Update"
 $scheduleDay = "Sunday"
 $scheduleTime = "12pm"
 
-$action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument $taskPath
+$action = New-ScheduledTaskAction -Execute $powershellExe -Argument $taskPath
 $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -RunOnlyIfIdle -IdleDuration 00:10:00 -IdleWaitTimeout 04:00:00
 $trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek $scheduleDay -At $scheduleTime
 
