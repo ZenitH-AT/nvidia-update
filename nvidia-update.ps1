@@ -360,7 +360,7 @@ function Get-DriverLookupParameters {
 
 	# Determine product family (GPU) ID
 	try {
-		$gpuData = Invoke-RestMethod -Uri "$($rawDataRepo)/$($dataRepoGpuDataFile)"
+		$gpuData = Invoke-RestMethod -Uri "$($rawDataRepo)/$($dataRepoGpuDataFile)" | ConvertFrom-Json -AsHashTable
 
 		if (-not $Notebook -and ($Desktop -or -not $IsNotebook)) {
 			$gpuId = $gpuData."desktop".$GpuName
@@ -402,7 +402,7 @@ function Get-DriverLookupParameters {
 	# Check if using DCH driver
 	$dch = 0
 
-	if ($osVersion -eq 10.0) {
+	if ($osVersion -eq "10.0") {
 		if (Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\nvlddmkm" -Name "DCHUVen" -ErrorAction Ignore) {
 			$dch = 1
 		}
