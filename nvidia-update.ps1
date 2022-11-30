@@ -1,5 +1,5 @@
 <#PSScriptInfo
-.VERSION 1.13.2
+.VERSION 1.13.3
 .GUID dd04650b-78dc-4761-89bf-b6eeee74094c
 .AUTHOR ZenitH-AT
 .LICENSEURI https://raw.githubusercontent.com/ZenitH-AT/nvidia-update/master/LICENSE
@@ -24,7 +24,10 @@ New-Variable -Name "scriptVersionFileUrl" -Value "https://raw.githubusercontent.
 New-Variable -Name "scriptFileUrl" -Value "https://raw.githubusercontent.com/ZenitH-AT/nvidia-update/master/nvidia-update.ps1" -Option Constant
 New-Variable -Name "gpuDataFileUrl" -Value "https://raw.githubusercontent.com/ZenitH-AT/nvidia-data/main/gpu-data.json" -Option Constant
 New-Variable -Name "osDataFileUrl" -Value "https://raw.githubusercontent.com/ZenitH-AT/nvidia-data/main/os-data.json" -Option Constant
+New-Variable -Name "driverLookupUri" -Value "https://gfwsl.geforce.com/services_toolkit/services/com/nvidia/services/AjaxDriverService.php?func=DriverManualLookup&pfid={0}&osID={1}&dch={2}" -Option Constant
 New-Variable -Name "osBits" -Value "$(if ([Environment]::Is64BitOperatingSystem) { 64 } else { 32 })" -Option Constant
+New-Variable -Name "notebookChassisTypes" -Value @(8, 9, 10, 11, 12, 14, 18, 21, 31, 32) -Option Constant
+New-Variable -Name "dchSupportedOsIds" -Value @(56, 57, 135) -Option Constant
 New-Variable -Name "dataDividends" -Value @(1, 1024, 1048576) -Option Constant
 New-Variable -Name "dataUnits" -Value @("B", "KiB", "MiB") -Option Constant
 
@@ -336,7 +339,7 @@ function Get-GpuData {
 
 			# Determine if computer is a notebook to always download the correct driver,
 			# since some GPUs are present in both a desktop and notebook series (e.g. GeForce GTX 1050 Ti)
-			$isNotebook = [bool](Get-CimInstance -ClassName Win32_SystemEnclosure).ChassisTypes.Where({ $_ -in @(9, 10, 14) })
+			$isNotebook = [bool](Get-CimInstance -ClassName Win32_SystemEnclosure).ChassisTypes.Where({ $_ -in $notebookChassisTypes })
 
 			$compatibleGpuFound = $true
 			break
@@ -389,7 +392,8 @@ function Get-DriverLookupParameters {
 		}
 
 		foreach ($os in $osData) {
-			if (($os.code -eq $osVersion) -and ($os.name -match $osBits)) {
+			# TODO: Improve Windows 11 detection (shouldn't matter for now since Windows 10 64-bit and Windows 11 use the same drivers)
+			if ($os.code -eq $osVersion -and $os.name -match $osBits) {
 				$osId = $os.id
 				break
 			}
@@ -400,30 +404,22 @@ function Get-DriverLookupParameters {
 		Write-ExitError "`nCould not find a driver supported by your operating system."
 	}
 
-	# Check if using DCH driver
-	$dch = 0
+	# Check if DCH supported and if using DCH driver
+	$dchSupported = $osId -in $dchSupportedOsIds
+	$dch = $osId -in $dchSupportedOsIds -and (Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\nvlddmkm" -Name "DCHUVen" -ErrorAction Ignore)
 
-	if ($osVersion -eq "10.0") {
-		if (Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\nvlddmkm" -Name "DCHUVen" -ErrorAction Ignore) {
-			$dch = 1
-		}
-	}
-
-	return $gpuId, $osId, $dch
+	return $gpuId, $osId, $dchSupported, $dch
 }
 
 function Get-DriverDownloadInfo {
 	param (
 		[Parameter(Position = 0, Mandatory)] [ValidateNotNullOrEmpty()] [string] $GpuId,
 		[Parameter(Position = 1, Mandatory)] [ValidateNotNullOrEmpty()] [string] $OsId,
-		[Parameter(Position = 2, Mandatory)] [ValidateNotNullOrEmpty()] [string] $Dch
+		[Parameter(Position = 2, Mandatory)] [ValidateNotNullOrEmpty()] [bool] $Dch
 	)
 
-	$request = "https://gfwsl.geforce.com/services_toolkit/services/com/nvidia/services/AjaxDriverService.php?"
-	$request += "func=DriverManualLookup&pfid=$($GpuId)&osID=$($OsId)&dch=$($Dch)"
-
 	try {
-		$payload = Invoke-RestMethod -Uri $request
+		$payload = Invoke-RestMethod -Uri ($driverLookupUri -f $GpuId, $OsId, [int]$Dch)
 
 		if ($payload.Success -eq 1) {
 			return $payload.IDS[0].downloadInfo
@@ -617,44 +613,71 @@ try {
 	Write-Host "`n`tDetected graphics card name:`t$($gpuName)"
 	Write-Host "`tCurrent driver version:`t`t$($currentDriverVersion)"
 
-	$gpuId, $osId, $dch = Get-DriverLookupParameters $gpuName $isNotebook
+	$gpuId, $osId, $dchSupported, $dch = Get-DriverLookupParameters $GpuName $IsNotebook
+
 	$driverDownloadInfo = Get-DriverDownloadInfo $gpuId $osId $dch
 
 	$latestDriverVersion = $driverDownloadInfo.Version
+	$driverDownloadUrl = $driverDownloadInfo.DownloadURL
 
 	Write-Host "`tLatest driver version:`t`t$($latestDriverVersion)"
+
+	$dchSupportedAndUsingNonDchDriver = $dchSupported -and $dch -eq $false
+
+	if ($dchSupportedAndUsingNonDchDriver) {
+		# DCH supported but not using DCH driver; check if a newer driver is available as a DCH driver
+		# NOTE: $latestDriverVersion and $driverDownloadUrl represent non-DCH driver data in this case
+		$dchDriverDownloadInfo = Get-DriverDownloadInfo $gpuId $osId $true
+
+		$latestDchDriverVersion = $dchDriverDownloadInfo.Version
+		$dchDriverDownloadUrl = $dchDriverDownloadInfo.DownloadURL
+
+		Write-Host "`tLatest driver version (DCH):`t$($latestDchDriverVersion)"
+	}
 }
 catch {
 	Write-ExitError "`nUnable to determine latest driver version."
 }
 
 ## Compare installed driver version to latest driver version
-if (-not $Clean -and ($currentDriverVersion -eq $latestDriverVersion)) {
+if (-not $Clean -and -not $dchSupportedAndUsingNonDchDriver -and $currentDriverVersion -eq $latestDriverVersion) {
 	Write-ExitError "`nThe latest driver (version $($currentDriverVersion)) is already installed."
 }
 
-## Create temporary folder and download the installer
-$dlDriverPath = "$($Directory)\$($latestDriverVersion).exe"
+## Offer driver download and installation
+$dlDriverPath = "$($Directory)\install.exe"
 
 Write-Host "`nReady to download the latest driver installer to `"$($dlDriverPath)`"..."
 
-$decision = $Host.UI.PromptForChoice("", "`nDo you want to download and install the latest driver?", ("&Yes", "&No"), 0)
+$options = @("&Yes", "&No")
 
-if ($decision -eq 0) {
-	# Remove existing temporary folder if present
-	Remove-Temp $Directory
+if ($dchSupportedAndUsingNonDchDriver) {
+	$options = @("&Yes (upgrade to DCH driver)", "Y&es", "&No")
 
-	New-Item -Path $Directory -ItemType "directory" > $null
-
-	Write-Time
-	Write-Host "Downloading latest driver installer..."
-
-	Get-WebFile $driverDownloadInfo.DownloadURL $dlDriverPath
+	if ($currentDriverVersion -eq $latestDriverVersion) {
+		$options = @("&Yes (upgrade to DCH driver)", "&No")
+	}
 }
-else {
+
+$decision = $Host.UI.PromptForChoice("", "`nDo you want to download and install the latest driver?", $options, 0)
+
+if ($decision -eq $options.Length - 1) {
 	Write-Time
 	Write-ExitError "Driver download cancelled."
 }
+
+## Create/recreate temporary folder and download the installer
+Remove-Temp $Directory
+
+New-Item -Path $Directory -ItemType "directory" > $null
+
+Write-Time
+Write-Host "Downloading latest driver installer..."
+
+# Set driver download URL based on selection if a non-DCH driver is installed and a newer DCH driver is available
+$driverDownloadUrl = if ($dchSupportedAndUsingNonDchDriver -and $decision -eq 0) { $dchDriverDownloadUrl } else { $driverDownloadUrl }
+
+Get-WebFile $driverDownloadUrl $dlDriverPath
 
 ## Extract setup files
 $extractDir = "$($Directory)\$($latestVersion)"

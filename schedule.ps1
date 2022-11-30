@@ -1,5 +1,5 @@
 <#PSScriptInfo
-.VERSION 1.4
+.VERSION 1.5
 .GUID 544ddf4b-d7df-44b2-abcf-f452793c0fa7
 .AUTHOR ZenitH-AT
 .LICENSEURI https://raw.githubusercontent.com/ZenitH-AT/nvidia-update/master/LICENSE
@@ -8,7 +8,7 @@
 #>
 
 ## Constant variables and functions
-New-Variable -Name "rawScriptRepo" -Value "https://raw.githubusercontent.com/ZenitH-AT/nvidia-update/master" -Option Constant
+New-Variable -Name "scriptVersionFileUrl" -Value "https://raw.githubusercontent.com/ZenitH-AT/nvidia-update/master/version.txt" -Option Constant
 
 function Write-ExitError {
 	param (
@@ -41,7 +41,7 @@ if (!(Test-Path $taskDir)) {
 
 # Get latest script version from repository
 try {
-	$latestScriptVersion = Invoke-WebRequest -Uri "$($rawScriptRepo)/version.txt"
+	$latestScriptVersion = Invoke-WebRequest -Uri $scriptVersionFileUrl
 	$latestScriptVersion = "$($latestScriptVersion)".Trim()
 }
 catch {

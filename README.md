@@ -70,10 +70,10 @@ The pfid and osID are determined by reading files in the [ZenitH-AT/nvidia-data]
 - Greatly improved error handling (script is now hopefully idiot-proof).
 - Loading animations are shown where applicable (e.g. "Installing driver... /").
 - Refactored and reorganised a ton of the code.
-- Implemented a few changes and fixes from the [BearGrylls](https://github.com/BearGrylls/nvidia-update) and [fl4pj4ck](https://github.com/fl4pj4ck/nvidia-update) forks (sorry for abandoning this repository for so long)
+- Implemented a few changes and fixes from the [BearGrylls](https://github.com/BearGrylls/nvidia-update) and [fl4pj4ck](https://github.com/fl4pj4ck/nvidia-update) forks, as well as [TinyNvidiaUpdateChecker](https://github.com/ElPumpo/TinyNvidiaUpdateChecker)
 
 ## ZenitH-AT's planned changes
 
 - 7-Zip download should get the URL of the latest version instead of using a predefined URL.
-- Optional components should be selected from within the script and handle dependencies, like NVCleanstall.
+- Optional components should be selected from within the script and handle dependencies, like [NVCleanstall](https://www.techpowerup.com/nvcleanstall/).
 	- Dependencies can be determined by recursively reading `.nvi` files
