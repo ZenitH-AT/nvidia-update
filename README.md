@@ -1,6 +1,8 @@
-# nvidia-update (ZenitH-AT fork)
+# nvidia-update
 
 Checks for a new version of the NVIDIA Driver, downloads and installs it. Windows 10+ only and PowerShell 6+ recommended.
+
+Fork of [lord-carlos/nvidia-update](https://github.com/lord-carlos/nvidia-update).
 
 ## Usage
 
@@ -36,7 +38,7 @@ Invoke-Expression (Invoke-WebRequest -Uri "https://github.com/ZenitH-AT/nvidia-u
 
 ## Requirements / Dependencies
 
-A supported archiver (7-Zip or WinRAR) is needed to extract the drivers.
+A supported archiver (7-Zip or WinRAR) is required to extract driver files.
 
 ## How does the script check for the latest driver version?
 
@@ -52,7 +54,7 @@ Example:
 
 The pfid and osID are determined by reading files in the [ZenitH-AT/nvidia-data](https://github.com/ZenitH-AT/nvidia-data) repository, which queries the NVIDIA Download API ([lookupValueSearch](https://www.nvidia.com/Download/API/lookupValueSearch.aspx)).
 
-## ZenitH-AT's changes
+## How does this differ from lord-carlos/nvidia-update?
 
 - The script can now self-update.
 - Getting the download link now uses NVIDIA's AjaxDriverService. DCH drivers are now supported and there is no risk of the script not working if NVIDIA changes the download URL format. RP packages are not supported.
@@ -72,8 +74,7 @@ The pfid and osID are determined by reading files in the [ZenitH-AT/nvidia-data]
 - Refactored and reorganised a ton of the code.
 - Implemented a few changes and fixes from the [BearGrylls](https://github.com/BearGrylls/nvidia-update) and [fl4pj4ck](https://github.com/fl4pj4ck/nvidia-update) forks, as well as [TinyNvidiaUpdateChecker](https://github.com/ElPumpo/TinyNvidiaUpdateChecker)
 
-## ZenitH-AT's planned changes
+## Planned changes
 
-- 7-Zip download should get the URL of the latest version instead of using a predefined URL.
 - Optional components should be selected from within the script and handle dependencies, like [NVCleanstall](https://www.techpowerup.com/nvcleanstall/).
 	- Dependencies can be determined by recursively reading `.nvi` files
