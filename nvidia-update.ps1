@@ -680,7 +680,7 @@ $driverDownloadUrl = if ($dchSupportedAndUsingNonDchDriver -and $decision -eq 0)
 Get-WebFile $driverDownloadUrl $dlDriverPath
 
 ## Extract setup files
-$extractDir = "$($Directory)\$($latestVersion)"
+$extractDir = "$($Directory)\driver"
 
 Write-Time
 Write-Host "Extracting driver files..."
