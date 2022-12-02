@@ -1,5 +1,5 @@
 <#PSScriptInfo
-.VERSION 1.5
+.VERSION 1.6
 .GUID 544ddf4b-d7df-44b2-abcf-f452793c0fa7
 .AUTHOR ZenitH-AT
 .LICENSEURI https://raw.githubusercontent.com/ZenitH-AT/nvidia-update/master/LICENSE
@@ -59,7 +59,6 @@ $trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek $scheduleDay -At $schedu
 
 # Register task if it doesn't already exist or if it references a different script version (and delete outdated tasks)
 $registerTask = $true
-
 $existingTasks = Get-ScheduledTask | Where-Object TaskName -match "^nvidia-update."
 
 foreach ($existingTask in $existingTasks) {
@@ -83,9 +82,7 @@ if ($registerTask) {
 	}
 
 	Write-Host "Downloaded the latest script to `"$($taskPath)`".`n"
-
 	Register-ScheduledTask -TaskName $taskName -Action $action -Settings $settings -Trigger $trigger -Description $description | Out-Null
-
 	Write-Host -ForegroundColor Green "Scheduled task registered."
 }
 else {
@@ -99,8 +96,4 @@ if ($decision -eq 0) {
 }
 
 Write-Host "`nExiting script in 5 seconds..."
-
 Start-Sleep -s 5
-
-## End of script
-exit

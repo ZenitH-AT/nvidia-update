@@ -28,7 +28,7 @@ Fork of [lord-carlos/nvidia-update](https://github.com/lord-carlos/nvidia-update
 - Select `Open PowerShell window here`
 - Enter `.\nvidia-update.ps1 <parameters>` (ex: `.\nvidia-update.ps1 -Clean -Directory "C:\NVIDIA"`)
 
-## Running the script regularly and automatically
+## Automatically running the script periodically
 
 You can run the following PowerShell command to download and run the script weekly:
 
@@ -46,7 +46,7 @@ It uses the NVIDIA [AjaxDriverService](https://gfwsl.geforce.com/services_toolki
 
 Example:
 
-```https://gfwsl.geforce.com/services_toolkit/services/com/nvidia/services/AjaxDriverService.php?func=DriverManualLookup&pfid=877&osID=57&dch=1```
+`https://gfwsl.geforce.com/services_toolkit/services/com/nvidia/services/AjaxDriverService.php?func=DriverManualLookup&pfid=877&osID=57&dch=1`
 
 - **pfid**: Product Family (GPU) ID (e.g. _GeForce RTX 3070_: 933)
 - **osID**: Operating System ID (e.g. _Windows 10 64-bit_: 57)
@@ -60,15 +60,15 @@ The pfid and osID are determined by reading files in the [ZenitH-AT/nvidia-data]
 - Getting the download link now uses NVIDIA's AjaxDriverService. DCH drivers are now supported and there is no risk of the script not working if NVIDIA changes the download URL format. RP packages are not supported.
 - The GPU's product family ID (pfid) and operating system ID (osID) can now be determined by reading files in the [ZenitH-AT/nvidia-data](https://github.com/ZenitH-AT/nvidia-data) repository, rather than using static values, as older GPUs may use different drivers.
 - The user can now choose what optional driver components to include in the installation using the optional-components.cfg file.
-- The user can now enable message-signalled interrupts after driver installation by setting the "-Msi" optional parameter.
+- The user can now enable message-signalled interrupts after driver installation by setting the "`-Msi`" optional parameter.
 - Simplified and improved checking whether to use the desktop or notebook driver and implemented parameters to override the check.
 - Simplified and improved the archiver program check, download and installation.
-- Simplified the OS version and architecture (osBits) check and driver version comparison.
-- Simplified the GPU name and driver version retrieval (Get-GpuData).
-- Simplified and improved the scheduled task creation.
+- Simplified the OS version and architecture (`$osBits`) check and driver version comparison.
+- Simplified the GPU name and driver version retrieval (`Get-GpuData`).
+- Simplified and improved the scheduled task creation; now supports PowerShell 6+.
 - The script now checks for an internet connection before proceeding.
-- Implemented a function for downloading files (Get-WebFile).
-- Driver downloading now uses a custom Get-WebFile function (instead of Start-BitsTransfer, which occasionally caused issues).
+- Implemented a function for downloading files (`Get-WebFile`).
+	- Driver downloading now uses this function, rather than `Start-BitsTransfer`, which occasionally [caused issues](https://i.imgur.com/TcCenpo.png).
 - Greatly improved error handling (script is now hopefully idiot-proof).
 - Loading animations are shown where applicable (e.g. "Installing driver... /").
 - Refactored and reorganised a ton of the code.
@@ -78,3 +78,4 @@ The pfid and osID are determined by reading files in the [ZenitH-AT/nvidia-data]
 
 - Optional components should be selected from within the script and handle dependencies, like [NVCleanstall](https://www.techpowerup.com/nvcleanstall/).
 	- Dependencies can be determined by recursively reading `.nvi` files
+	- Will require implementing a simple TUI

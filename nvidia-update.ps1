@@ -1,8 +1,8 @@
 <#PSScriptInfo
-.VERSION 1.13.3
+.VERSION 1.14
 .GUID dd04650b-78dc-4761-89bf-b6eeee74094c
 .AUTHOR ZenitH-AT
-.LICENSEURI https://raw.githubusercontent.com/ZenitH-AT/nvidia-update/master/LICENSE
+.LICENSEURI https://raw.githubusercontent.com/ZenitH-AT/nvidia-update/main/LICENSE
 .PROJECTURI https://github.com/ZenitH-AT/nvidia-update
 .DESCRIPTION Checks for a new version of the NVIDIA driver, downloads and installs it. 
 #>
@@ -18,10 +18,10 @@ param (
 )
 
 ## Constant variables and functions
-New-Variable -Name "scriptPath" -Value $PSCommandPath -Option Constant
-New-Variable -Name "currentScriptVersion" -Value "$(Test-ScriptFileInfo -Path $scriptPath | ForEach-Object Version)" -Option Constant
-New-Variable -Name "scriptVersionFileUrl" -Value "https://raw.githubusercontent.com/ZenitH-AT/nvidia-update/master/version.txt" -Option Constant
-New-Variable -Name "scriptFileUrl" -Value "https://raw.githubusercontent.com/ZenitH-AT/nvidia-update/master/nvidia-update.ps1" -Option Constant
+New-Variable -Name "configFilePath" -Value "$($PSScriptRoot)\optional-components.cfg" -Option Constant
+New-Variable -Name "currentScriptVersion" -Value "$(Test-ScriptFileInfo -Path $PSCommandPath | ForEach-Object VERSION)" -Option Constant
+New-Variable -Name "scriptRepoUri" -Value "$(Test-ScriptFileInfo -Path $PSCommandPath | ForEach-Object PROJECTURI)" -Option Constant
+New-Variable -Name "defaultSscriptFileName" -Value "nvidia-update.ps1" -Option Constant
 New-Variable -Name "gpuDataFileUrl" -Value "https://raw.githubusercontent.com/ZenitH-AT/nvidia-data/main/gpu-data.json" -Option Constant
 New-Variable -Name "osDataFileUrl" -Value "https://raw.githubusercontent.com/ZenitH-AT/nvidia-data/main/os-data.json" -Option Constant
 New-Variable -Name "driverLookupUri" -Value "https://gfwsl.geforce.com/services_toolkit/services/com/nvidia/services/AjaxDriverService.php?func=DriverManualLookup&pfid={0}&osID={1}&dch={2}" -Option Constant
@@ -30,10 +30,6 @@ New-Variable -Name "notebookChassisTypes" -Value @(8, 9, 10, 11, 12, 14, 18, 21,
 New-Variable -Name "dchSupportedOsIds" -Value @(56, 57, 135) -Option Constant
 New-Variable -Name "dataDividends" -Value @(1, 1024, 1048576) -Option Constant
 New-Variable -Name "dataUnits" -Value @("B", "KiB", "MiB") -Option Constant
-
-function Exit-Script {
-	exit
-}
 
 function Remove-Temp {
 	if (Test-Path $Directory) {
@@ -48,26 +44,23 @@ function Remove-Temp {
 
 function Write-ExitError {
 	param (
-		[Parameter(Position = 0, Mandatory)] [ValidateNotNullOrEmpty()] [string] $ErrorMessage,
-		[Parameter(Position = 1)] [switch] $RemoveTemp
+		[Parameter(Mandatory)] [ValidateNotNullOrEmpty()] [string] $ErrorMessage,
+		[switch] $RemoveTemp
 	)
 
 	Write-Host $ErrorMessage -ForegroundColor Yellow
 
 	if ($RemoveTemp) {
 		Write-Host "`nRemoving temporary files..."
-
 		Remove-Temp $Directory
-
-		# Only write new line after any potential error message from Remove-Temp
-		Write-Host
+		Write-Host # Only write new line after any potential error message from Remove-Temp
 	}
 
 	Write-Host "Press any key to exit..."
 
 	$host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
 
-	Exit-Script
+	exit
 }
 
 function Write-ExitTimer {
@@ -78,10 +71,9 @@ function Write-ExitTimer {
 	$seconds = [System.Math]::Floor($Milliseconds / 1000)
 
 	Write-Host "`nExiting script in $($seconds) seconds..."
-
 	Start-Sleep -Milliseconds $Milliseconds
 
-	Exit-Script
+	exit
 }
 
 function Write-Time {
@@ -119,9 +111,7 @@ function Get-ConvertedBytesString {
 		[Parameter(Position = 2, Mandatory)] [ValidateNotNullOrEmpty()] [string] $UnitIndex
 	)
 
-	$convertedBytes = [System.Math]::Round(($Bytes / $dataDividends[$UnitIndex]), $Decimals)
-
-	return $convertedBytes.ToString("0.$("0" * $Decimals)")
+	return [System.Math]::Round(($Bytes / $dataDividends[$UnitIndex]), $Decimals).ToString("0.$("0" * $Decimals)")
 }
 
 function Get-WebFile {
@@ -132,12 +122,10 @@ function Get-WebFile {
 
 	# Create runspace pool and runspace for download
 	$pool = [RunspaceFactory]::CreateRunspacePool(1, [Environment]::ProcessorCount + 1)
-		
 	$pool.ApartmentState = "MTA"
 	$pool.Open()
 
 	$runspace = [PowerShell]::Create()
-
 	$runspace.RunspacePool = $pool
 
 	# Handle download in a script block
@@ -147,39 +135,29 @@ function Get-WebFile {
 
 	$scriptBlock = {
 		param (
-			[Parameter(Position = 0, Mandatory)] [ValidateNotNullOrEmpty()] [string] $Url,
-			[Parameter(Position = 1, Mandatory)] [ValidateNotNullOrEmpty()] [string] $TargetPath,
-			[Parameter(Position = 2, Mandatory)] [ValidateNotNullOrEmpty()] [ref] [int] $TotalBytes,
-			[Parameter(Position = 3, Mandatory)] [ValidateNotNullOrEmpty()] [ref] [int] $DownloadedBytes,
-			[Parameter(Position = 4, Mandatory)] [ValidateNotNullOrEmpty()] [ref] [bool] $DownloadHadError
+			[Parameter(Position = 0, Mandatory)] [ValidateNotNullOrEmpty()] [string] $parentPid,	
+			[Parameter(Position = 1, Mandatory)] [ValidateNotNullOrEmpty()] [string] $Url,
+			[Parameter(Position = 2, Mandatory)] [ValidateNotNullOrEmpty()] [string] $TargetPath,
+			[Parameter(Position = 3, Mandatory)] [ValidateNotNullOrEmpty()] [ref] [int] $TotalBytes,
+			[Parameter(Position = 4, Mandatory)] [ValidateNotNullOrEmpty()] [ref] [int] $DownloadedBytes,
+			[Parameter(Position = 5, Mandatory)] [ValidateNotNullOrEmpty()] [ref] [bool] $DownloadHadError
 		)
 
 		try {
-			$uri = New-Object -TypeName "System.Uri" $Url
-
-			$request = [System.Net.HttpWebRequest]::Create($uri)
-
-			$request.set_Timeout(15000) # 15 seconds
-
-			$response = $request.GetResponse()
-
+			$response = [System.Net.WebRequest]::Create($url).GetResponse()
 			$TotalBytes.Value = $response.get_ContentLength()
-
 			$responseStream = $response.GetResponseStream()
+			$targetStream = [System.IO.FileStream]::New($TargetPath, "Create")
+			$buffer = [byte[]]::New(65536) # 64 KiB
 
-			$targetStream = New-Object -TypeName "System.IO.FileStream" -ArgumentList $TargetPath, Create
-
-			$buffer = New-Object byte[] 10240 # 10 KiB
-
+			# Download file until completion or parent process killed
 			do {
 				$count = $responseStream.Read($buffer, 0, $buffer.Length)
 
 				$targetStream.Write($buffer, 0, $count)
 
 				$DownloadedBytes.Value += $count
-
-				# TODO: Stop download if parent process ended
-			} while ($count -gt 0)
+			} while ($count -gt 0 -and (Get-Process -Id $parentPid -ErrorAction Ignore))
 		}
 		catch {
 			$DownloadHadError.Value = $true
@@ -201,6 +179,7 @@ function Get-WebFile {
 	}
 
 	$runspace.AddScript($scriptblock) > $null
+	$runspace.AddArgument($PID) > $null
 	$runspace.AddArgument($Url) > $null
 	$runspace.AddArgument($TargetPath) > $null
 	$runspace.AddArgument([ref]$totalBytes) > $null
@@ -219,21 +198,16 @@ function Get-WebFile {
 	}
 
 	# Check and display download progress every 200 milliseconds until runspace completion
-	$activity = "Downloading file `"$($Url -split "/" | Select-Object -Last 1)`" to `"$($TargetPath)`"..."
-
+	$activity = "Downloading file to `"$($TargetPath)`"..."
 	$decimals, $unitIndex = Get-DecimalsAndUnitIndex $totalBytes
-
 	$totalString = Get-ConvertedBytesString $totalBytes $decimals $unitIndex
 
 	while ($download.Status.IsCompleted -eq $false) {
 		$downloadedString = Get-ConvertedBytesString $downloadedBytes $decimals $unitIndex
-
 		$status = "Downloaded $($downloadedString) of $($totalString) $($dataUnits[$unitIndex])"
-
 		$percentComplete = ($downloadedBytes / $totalBytes) * 100
 
 		Write-Progress -Activity $activity -Status $status -PercentComplete $percentComplete
-
 		Start-Sleep -Milliseconds 200
 	}
 
@@ -255,70 +229,6 @@ function Get-WebFile {
 	}
 }
 
-function Show-LoadingAnimation {
-	param (
-		[Parameter(Mandatory)] [ValidateNotNullOrEmpty()] $Process
-	)
-
-	$loadingAnimation = @("|", "/", "-", "\")
-	
-	# Write two spaces to account for backspace (`b) character
-	Write-Host "  " -NoNewline
-
-	# Show loading animation until the process returns an exit code
-	while ($Process.ExitCode -ne 0) {
-		# Throw an error if the process returns an exit code other than 0 (EXIT_FAILURE) 
-		if ($Process.ExitCode -gt 0) {
-			throw
-		}
-
-		$loadingAnimation | ForEach-Object {
-			Write-Host "`b$_" -ForegroundColor Yellow -NoNewline
-
-			Start-Sleep -Milliseconds 250
-		}
-	}
-
-	# Backspace and overwrite loading character with a space once process is complete
-	Write-Host "`b "
-}
-
-function Start-Installation {
-	param (
-		[Parameter(Position = 0, Mandatory)] [ValidateNotNullOrEmpty()] [string] $FilePath,
-		[Parameter(Position = 1, Mandatory)] [ValidateNotNullOrEmpty()] [string] $ArgumentList,
-		[Parameter(Position = 2, Mandatory)] [ValidateNotNullOrEmpty()] [string] $InstallingMessage,
-		[Parameter(Position = 3, Mandatory)] [ValidateNotNullOrEmpty()] [string] $ErrorMessage
-	)
-
-	do {
-		Write-Time
-		Write-Host $InstallingMessage -ForegroundColor Cyan -NoNewline
-
-		try {
-			$errorOccurred = $false
-
-			$installation = Start-Process -FilePath $FilePath -ArgumentList $ArgumentList -PassThru
-
-			Show-LoadingAnimation $installation
-		}
-		catch {
-			$errorOccurred = $true
-
-			# Write newline (`n) character to account for -NoNewline
-			Write-Host "`n$($ErrorMessage)" -ForegroundColor Yellow
-
-			$decision = $Host.UI.PromptForChoice("", "`nDo you want to try again?", ("&Yes", "&No"), 0)
-
-			if ($decision -eq 1) {
-				return $true
-			}
-		}
-	} while ($errorOccurred)
-
-	return $false
-}
-
 function Get-GpuData {
 	$gpus = @(Get-CimInstance Win32_VideoController | Select-Object PNPDeviceID, Name, DriverVersion)
 
@@ -328,20 +238,15 @@ function Get-GpuData {
 
 		if ($gpuName -match "^NVIDIA") {
 			# Clean GPU name, accounting for card variants (e.g. 1060 6GB, 760Ti (OEM))
-			if ($gpuName -match "(?<=NVIDIA )(.*(?= [0-9]+GB)|.*(?= with Max-Q Design)|.*(?= \([A-Z]+\))|.*)") {
-				$gpuName = $Matches[0].Replace("Super", "SUPER").Trim()
-			}
-			else {
+			if (-not ($gpuName -match "(?<=NVIDIA )(.*(?= [0-9]+GB)|.*(?= with Max-Q Design)|.*(?= \([A-Z]+\))|.*)")) {
 				Write-ExitError "`nUnrecognised GPU name $($gpuName). This should not happen."
 			}
 
+			$gpuName = $Matches[0].Replace("Super", "SUPER").Trim()
 			$currentDriverVersion = ($gpu.DriverVersion.Replace(".", "")[-5..-1] -join "").Insert(3, ".")
-
-			# Determine if computer is a notebook to always download the correct driver,
-			# since some GPUs are present in both a desktop and notebook series (e.g. GeForce GTX 1050 Ti)
 			$isNotebook = [bool](Get-CimInstance -ClassName Win32_SystemEnclosure).ChassisTypes.Where({ $_ -in $notebookChassisTypes })
-
 			$compatibleGpuFound = $true
+
 			break
 		}
 	}
@@ -359,17 +264,17 @@ function Get-DriverLookupParameters {
 		[Parameter(Position = 1, Mandatory)] [ValidateNotNullOrEmpty()] [bool] $IsNotebook
 	)
 
-	$gpuType = if (-not $Notebook -and ($Desktop -or -not $IsNotebook)) { "desktop" } else { "notebook" }
+	$gpuType = if ($Desktop -or -not ($Notebook -or $IsNotebook)) { "desktop" } else { "notebook" }
 
 	# Determine product family (GPU) ID
 	$gpuId = $GpuId # Initially assume user manually specified GPU ID
 
 	if (!$GpuId) {
 		try {
-			$gpuId = ((Invoke-RestMethod -Uri $gpuDataFileUrl).Replace("Super", "SUPER_") | ConvertFrom-Json).$gpuType.$GpuName
+			$gpuId = (Invoke-RestMethod -Uri $gpuDataFileUrl | ConvertFrom-Json).$gpuType.$GpuName
 		}
 		catch {
-			Write-ExitError "Unable to retrieve GPU data. Please try running this script again."
+			Write-ExitError "`nUnable to retrieve GPU data. Please try running this script again."
 		}
 	}
 
@@ -395,6 +300,7 @@ function Get-DriverLookupParameters {
 			# TODO: Improve Windows 11 detection (shouldn't matter for now since Windows 10 64-bit and Windows 11 use the same drivers)
 			if ($os.code -eq $osVersion -and $os.name -match $osBits) {
 				$osId = $os.id
+
 				break
 			}
 		}
@@ -421,16 +327,91 @@ function Get-DriverDownloadInfo {
 	try {
 		$payload = Invoke-RestMethod -Uri ($driverLookupUri -f $GpuId, $OsId, [int]$Dch)
 
-		if ($payload.Success -eq 1) {
-			return $payload.IDS[0].downloadInfo
+		if (-not $payload.Success -eq 1) {
+			return $null
 		}
-		else {
-			Write-ExitError "`nCould not find a driver for your GPU."
-		}
+
+		return $payload.IDS[0].downloadInfo
 	}
 	catch {
 		Write-ExitError "Unable to get driver download info. Please try running this script again."
 	}
+}
+
+function Get-RegistryValueData {
+	param(
+		[Parameter(Position = 0, Mandatory)] [ValidateNotNullOrEmpty()] [string] $Key,
+		[Parameter(Position = 1, Mandatory)] [ValidateNotNullOrEmpty()] [string] $Value,
+		[Parameter(Position = 2)] [string] $DataSuffix
+	)
+
+	if (Test-Path $Key) {
+		return "$(Get-ItemPropertyValue -Path $Key -Name $Value)$($DataSuffix)"
+	}
+
+	return $null
+}
+
+function Show-LoadingAnimation {
+	param (
+		[Parameter(Mandatory)] [ValidateNotNullOrEmpty()] $Process
+	)
+
+	$loadingAnimation = @("|", "/", "-", "\")
+	
+	# Write two spaces to account for backspace (`b) character
+	Write-Host "  " -NoNewline
+
+	# Show loading animation until the process returns an exit code
+	while ($Process.ExitCode -ne 0) {
+		# Throw an error if the process returns an exit code other than 0 (EXIT_FAILURE) 
+		if ($Process.ExitCode -gt 0) {
+			throw
+		}
+
+		$loadingAnimation | ForEach-Object {
+			Write-Host "`b$_" -ForegroundColor Yellow -NoNewline
+			Start-Sleep -Milliseconds 250
+		}
+	}
+
+	# Backspace and overwrite loading character with a space once process is complete
+	Write-Host "`b "
+}
+
+function Start-Installation {
+	param (
+		[Parameter(Position = 0, Mandatory)] [ValidateNotNullOrEmpty()] [string] $FilePath,
+		[Parameter(Position = 1, Mandatory)] [ValidateNotNullOrEmpty()] [string] $ArgumentList,
+		[Parameter(Position = 2, Mandatory)] [ValidateNotNullOrEmpty()] [string] $InstallingMessage,
+		[Parameter(Position = 3, Mandatory)] [ValidateNotNullOrEmpty()] [string] $ErrorMessage
+	)
+
+	do {
+		Write-Time
+		Write-Host $InstallingMessage -ForegroundColor Cyan -NoNewline
+
+		try {
+			$errorOccurred = $false
+			$installation = Start-Process -FilePath $FilePath -ArgumentList $ArgumentList -PassThru
+
+			Show-LoadingAnimation $installation
+		}
+		catch {
+			$errorOccurred = $true
+
+			# Write newline (`n) character to account for -NoNewline
+			Write-Host "`n$($ErrorMessage)" -ForegroundColor Yellow
+
+			$decision = $Host.UI.PromptForChoice("", "`nDo you want to try again?", @("&Yes", "&No"), 0)
+
+			if ($decision -eq 1) {
+				return $true
+			}
+		}
+	} while ($errorOccurred)
+
+	return $false
 }
 
 ## Register scheduled task if the "-Schedule" parameter is set
@@ -440,7 +421,7 @@ if ($Schedule) {
 	$scheduleDay = "Sunday"
 	$scheduleTime = "12pm"
 
-	$action = New-ScheduledTaskAction -Execute $powershellExe -Argument "-File `"$($scriptPath)`" $($MyInvocation.UnboundArguments)"
+	$action = New-ScheduledTaskAction -Execute $powershellExe -Argument "-File `"$($PSCommandPath)`" $($MyInvocation.UnboundArguments)"
 	$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -RunOnlyIfIdle -IdleDuration 00:10:00 -IdleWaitTimeout 04:00:00
 	$trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek $scheduleDay -At $scheduleTime
 
@@ -486,11 +467,11 @@ if (-not (Get-NetRoute | Where-Object DestinationPrefix -eq "0.0.0.0/0" | Get-Ne
 
 ## Check for script update and replace script if applicable
 Write-Host "Checking for script update..."
-
 Write-Host "`n`tCurrent script version:`t`t$($currentScriptVersion)"
 
 try {
-	$latestScriptVersion = (Invoke-WebRequest -Uri $scriptVersionFileUrl).Content.Trim()
+	$latestScriptReleaseUrl = [System.Net.WebRequest]::Create("$($scriptRepoUri)/releases/latest").GetResponse().ResponseUri.OriginalString
+	$latestScriptVersion = $latestScriptReleaseUrl.Split("/")[-1]
 
 	Write-Host "`tLatest script version:`t`t$($latestScriptVersion)"
 
@@ -498,30 +479,32 @@ try {
 		Write-Host "`nThis is the latest script (version $($currentScriptVersion))."
 	}
 	else {
-		Write-Host "`nReady to download the latest script file to `"$($scriptPath)`"..."
-		Write-Host "Note: `"optional-components.cfg`" will not be affected."
+		Write-Host "`nReady to download the latest script file to `"$($PSCommandPath)`"..."
 
-		$decision = $Host.UI.PromptForChoice("", "`nDo you want to update to and run the latest script?", ("&Yes", "&No (use current version)", "&Exit"), 0)
+		if (Test-Path $configFilePath) {
+			Write-Host "NOTE: $($configFilePath.Split("\")[-1]) won't be affected."
+		}
+
+		$decision = $Host.UI.PromptForChoice("", "`nDo you want to update to and run the latest script?", @("&Yes", "&No (use current version)", "&Exit"), 0)
 
 		if ($decision -eq 0) {
 			# Download new script to temporary folder
-			$dlScriptPath = "$($env:TEMP)\$($scriptRepoScriptFile)"
+			$scriptFileUrl = "$($latestScriptReleaseUrl.Replace("tag", "download"))/$($defaultSscriptFileName)"
+			$scriptDownloadPath = "$($env:TEMP)\$($defaultSscriptFileName)"
 
 			Write-Host "`nDownloading latest script file..."
-
-			Get-WebFile $scriptFileUrl $dlScriptPath
+			Get-WebFile $scriptFileUrl $scriptDownloadPath
 
 			# Overwrite this script and delete temporary file
-			Copy-Item $dlScriptPath -Destination $scriptPath
-
-			Remove-Item $dlScriptPath -Force
+			Copy-Item $scriptDownloadPath -Destination $PSCommandPath
+			Remove-Item $scriptDownloadPath -Force
 
 			# Run new script with the same arguments; include -Schedule if a scheduled task is registered to update the task
-			$argumentList = "$($MyInvocation.UnboundArguments)$(if (Get-ScheduledTask | Where-Object TaskName -match "^nvidia-update.") { " -Schedule" })"
+			$argumentList = "$($MyInvocation.UnboundArguments)$(if (Get-ScheduledTask | Where-Object TaskName -match "^nvidia-update .") { " -Schedule" })"
 
-			Start-Process -FilePath $powershellExe -ArgumentList "-File `"$($scriptPath)`" $($argumentList)"
+			Start-Process -FilePath $powershellExe -ArgumentList "-File `"$($PSCommandPath)`" $($argumentList)"
 
-			Exit-Script
+			exit
 		}
 		elseif ($decision -eq 2) {
 			Write-ExitTimer
@@ -529,78 +512,12 @@ try {
 	}
 }
 catch {
-	Write-Host "`nUnable to determine latest script version." -ForegroundColor Gray
+	Write-Host "`nUnable to determine latest script version. Check $($scriptRepoUri)/releases/latest manually for an update." -ForegroundColor Gray
 
-	$decision = $Host.UI.PromptForChoice("", "`nDo you want to continue with the current script?", ("&Yes", "&No"), 0)
+	$decision = $Host.UI.PromptForChoice("", "`nDo you want to continue with the current script?", @("&Yes", "&No"), 0)
 
 	if ($decision -eq 1) {
 		Write-ExitTimer
-	}
-}
-
-## Check if a supported archiver (7-Zip or WinRAR) is installed
-$7zInstalled = $false
-
-if (Test-Path "HKLM:\SOFTWARE\7-Zip") {
-	$7zPath = "$(Get-ItemPropertyValue -Path "HKLM:\SOFTWARE\7-Zip" -Name "Path")7z.exe"
-
-	if (Test-Path $7zPath) {
-		$archiverProgram = $7zPath
-		$7zInstalled = $true 
-	}
-}
-else {
-	if (Test-Path "HKLM:\SOFTWARE\WinRAR") {
-		$winRarPath = Get-ItemPropertyValue -Path "HKLM:\SOFTWARE\WinRAR" -Name "exe64"
-
-		if (Test-Path $winRarPath) {
-			$archiverProgram = $winRarPath
-		}
-	}
-	else {
-		Write-Host "`nSorry, but it looks like you don't have a supported archiver."
-
-		$decision = $Host.UI.PromptForChoice("", "`nDo you want to install 7-Zip?", ("&Yes", "&No"), 0)
-
-		if ($decision -eq 0) {
-			# Download 7-Zip to temporary folder and silently install
-			# TODO: Get URL of latest version dynamically
-			if ($osBits -eq "64") {
-				$archiverUrl = "https://www.7-zip.org/a/7z2201-x64.exe"
-			}
-			else {
-				$archiverUrl = "https://www.7-zip.org/a/7z2201.exe"
-			}
-
-			$dlArchiverPath = "$($env:TEMP)\7z1900-x64.exe"
-
-			Write-Time
-			Write-Host "Downloading 7-Zip..."
-
-			Get-WebFile $archiverUrl $dlArchiverPath
-
-			$argumentList = "/S"
-
-			$installingMessage = "Installing 7-zip..."
-
-			$errorMessage = "`nUAC prompt declined or an error occurred during installation."
-
-			$cancelled = Start-Installation $dlArchiverPath $argumentList $installingMessage $errorMessage
-
-			# Delete the installer once it completes
-			Remove-Item $dlArchiverPath -Force
-
-			if ($cancelled) {
-				Write-Time
-				Write-ExitError "7-Zip installation cancelled. A supported archiver is required to use this script."
-			}
-
-			Write-Time
-			Write-Host "7-Zip installed." -ForegroundColor Green
-		}
-		else {
-			Write-ExitError "`nA supported archiver is required to use this script."
-		}
 	}
 }
 
@@ -614,44 +531,101 @@ try {
 	Write-Host "`tCurrent driver version:`t`t$($currentDriverVersion)"
 
 	$gpuId, $osId, $dchSupported, $dch = Get-DriverLookupParameters $GpuName $IsNotebook
-
 	$driverDownloadInfo = Get-DriverDownloadInfo $gpuId $osId $dch
 
-	$latestDriverVersion = $driverDownloadInfo.Version
-	$driverDownloadUrl = $driverDownloadInfo.DownloadURL
+	if ($driverDownloadInfo) {
+		$latestDriverVersion = $driverDownloadInfo.Version
+		$driverDownloadUrl = $driverDownloadInfo.DownloadURL
+	
+		Write-Host "`tLatest driver version:`t`t$($latestDriverVersion)"
+	}
 
-	Write-Host "`tLatest driver version:`t`t$($latestDriverVersion)"
+	$dchDriverDownloadInfo = Get-DriverDownloadInfo $gpuId $osId $true
+	$dchAvailableAndUsingNonDchDriver = $dchDriverDownloadInfo -and $dchSupported -and $dch -eq $false
 
-	$dchSupportedAndUsingNonDchDriver = $dchSupported -and $dch -eq $false
-
-	if ($dchSupportedAndUsingNonDchDriver) {
-		# DCH supported but not using DCH driver; check if a newer driver is available as a DCH driver
+	if ($dchAvailableAndUsingNonDchDriver) {
+		# DCH supported and DCH driver available but using non-DCH driver
 		# NOTE: $latestDriverVersion and $driverDownloadUrl represent non-DCH driver data in this case
-		$dchDriverDownloadInfo = Get-DriverDownloadInfo $gpuId $osId $true
-
 		$latestDchDriverVersion = $dchDriverDownloadInfo.Version
 		$dchDriverDownloadUrl = $dchDriverDownloadInfo.DownloadURL
 
 		Write-Host "`tLatest driver version (DCH):`t$($latestDchDriverVersion)"
+	}
+
+	if (-not ($driverDownloadInfo -or $dchDriverDownloadInfo)) {
+		Write-ExitError "`nCould not find a driver for your GPU."
 	}
 }
 catch {
 	Write-ExitError "`nUnable to determine latest driver version."
 }
 
+## Get archiver (7-Zip or WinRAR) executable path and argument list
+$archiverPath = Get-RegistryValueData "HKLM:\SOFTWARE\7-Zip" "Path64" "7z.exe"
+$extractionArgumentList = "x -bso0 -bsp1 -bse1 `"{0}`" -o`"{1}`" {2}"
+
+if (-not $archiverPath) {
+	# 7-Zip not installed; use WinRAR if installed
+	$winRarPath = Get-RegistryValueData "HKLM:\SOFTWARE\WinRAR" "exe64"
+
+	if ($osBits -eq 32) {
+		$winRarPath = Get-RegistryValueData "HKLM:\SOFTWARE\WOW6432Node\WinRAR" "exe32"
+	}
+
+	if ($winRarPath) {
+		$archiverPath = $winRarPath
+		$extractionArgumentList = "x `"{0}`" `"{1}`" -IBCK {2}"
+	}
+	else {
+		# WinRAR not installed; offer 7-Zip installation
+		Write-Host "`nA supported archiver is required to extract driver files."
+
+		$decision = $Host.UI.PromptForChoice("", "`nDo you want to download and install 7-Zip?", @("&Yes", "&No"), 0)
+
+		if ($decision -eq 1) {
+			Write-ExitError "`nDriver files cannot be extracted without a supported archiver."
+		}
+
+		# Download 7-Zip to temporary folder and silently install
+		$archiverDownloadUrl = "$(if ($osBits -eq 64) { "https://www.7-zip.org/a/7z2201-x64.exe" } else { "https://www.7-zip.org/a/7z2201.exe" })"
+		$archiverDownloadPath = "$($env:TEMP)\7z-install.exe"
+
+		Write-Time
+		Write-Host "Downloading 7-Zip..."
+		Get-WebFile $archiverDownloadUrl $archiverDownloadPath
+
+		$argumentList = "/S"
+		$installingMessage = "Installing 7-zip..."
+		$errorMessage = "`nUAC prompt declined or an error occurred during installation."
+
+		$cancelled = Start-Installation $archiverDownloadPath $argumentList $installingMessage $errorMessage
+
+		# Installation complete; delete downloaded file
+		Remove-Item $archiverDownloadPath -Force
+
+		if ($cancelled) {
+			Write-Time
+			Write-ExitError "7-Zip installation cancelled. A supported archiver is required to use this script."
+		}
+
+		Write-Time
+		Write-Host "7-Zip installed." -ForegroundColor Green
+	}
+}
+
 ## Compare installed driver version to latest driver version
-if (-not $Clean -and -not $dchSupportedAndUsingNonDchDriver -and $currentDriverVersion -eq $latestDriverVersion) {
+if (-not $Clean -and -not $dchAvailableAndUsingNonDchDriver -and $currentDriverVersion -eq $latestDriverVersion) {
 	Write-ExitError "`nThe latest driver (version $($currentDriverVersion)) is already installed."
 }
 
 ## Offer driver download and installation
-$dlDriverPath = "$($Directory)\install.exe"
+$driverDownloadPath = "$($Directory)\install.exe"
 
-Write-Host "`nReady to download the latest driver installer to `"$($dlDriverPath)`"..."
+Write-Host "`nReady to download the latest driver installer to `"$($driverDownloadPath)`"..."
 
 $options = @("&Yes", "&No")
 
-if ($dchSupportedAndUsingNonDchDriver) {
+if ($dchAvailableAndUsingNonDchDriver) {
 	$options = @("&Yes (upgrade to DCH driver)", "Y&es", "&No")
 
 	if ($currentDriverVersion -eq $latestDriverVersion) {
@@ -668,39 +642,35 @@ if ($decision -eq $options.Length - 1) {
 
 ## Create/recreate temporary folder and download the installer
 Remove-Temp $Directory
-
 New-Item -Path $Directory -ItemType "directory" > $null
 
 Write-Time
 Write-Host "Downloading latest driver installer..."
 
 # Set driver download URL based on selection if a non-DCH driver is installed and a newer DCH driver is available
-$driverDownloadUrl = if ($dchSupportedAndUsingNonDchDriver -and $decision -eq 0) { $dchDriverDownloadUrl } else { $driverDownloadUrl }
+$driverDownloadUrl = if ($dchAvailableAndUsingNonDchDriver -and $decision -eq 0) { $dchDriverDownloadUrl } else { $driverDownloadUrl }
 
-Get-WebFile $driverDownloadUrl $dlDriverPath
+Get-WebFile $driverDownloadUrl $driverDownloadPath
 
 ## Extract setup files
-$extractDir = "$($Directory)\driver"
-
 Write-Time
 Write-Host "Extracting driver files..."
 
+$extractDir = "$($Directory)\driver"
 $filesToExtract = "Display.Driver NVI2 EULA.txt ListDevices.txt setup.cfg setup.exe"
 
-if (Test-Path "$($PSScriptRoot)\optional-components.cfg") {
-	Get-Content -Path "$($PSScriptRoot)\optional-components.cfg" | Where-Object { $_ -match "^[^\/]+" } | ForEach-Object {
-		$filesToExtract += " $($_)"
+if (Test-Path $configFilePath) {
+	Get-Content -Path $configFilePath | Where-Object { $_ -match "^[^\/]+" } | ForEach-Object {
+		$filesToExtract += " $($_.Split(" /")[0])"
 	}
 }
 
-if ($7zInstalled) {
-	Start-Process -FilePath $archiverProgram -NoNewWindow -ArgumentList "x -bso0 -bsp1 -bse1 -aoa $($dlDriverPath) $($filesToExtract) -o$($extractDir)" -Wait
+try {
+	Start-Process -FilePath $archiverPath -NoNewWindow -ArgumentList ($extractionArgumentList -f $driverDownloadPath, $extractDir, $filesToExtract) -Wait
 }
-elseif ($archiverProgram -eq $winRarPath) {
-	Start-Process -FilePath $archiverProgram -NoNewWindow -ArgumentList "x $($dlDriverPath) $($extractDir) -IBCK $($filesToExtract)" -Wait
-}
-else {
-	Write-ExitError "`nNo archive program detected. This should not happen." -RemoveTemp
+catch {
+	Write-Host $_
+	Write-ExitError "`nAn error occurred while extracting driver files."
 }
 
 ## Remove unnecessary dependencies from setup.cfg
@@ -719,7 +689,6 @@ if ($Clean) {
 }
 
 $installingMessage = "Installing driver..."
-
 $errorMessage = "`nUAC prompt declined or an error occurred during installation."
 
 $cancelled = Start-Installation "$($extractDir)\setup.exe" $argumentList $installingMessage $errorMessage
@@ -731,7 +700,6 @@ if ($cancelled) {
 
 ## Remove temporary (downloaded) files
 Write-Host "`nRemoving temporary files..."
-
 Remove-Temp
 
 ## Enable message-signalled interrupts if the "-Msi" parameter is set
@@ -752,18 +720,13 @@ Write-Time
 Write-Host "Driver installed. " -ForegroundColor Green -NoNewline 
 Write-Host "You may need to reboot to finish installation."
 
-$decision = $Host.UI.PromptForChoice("", "`nDo you want to reboot?", ("&Yes", "&No"), 1)
+$decision = $Host.UI.PromptForChoice("", "`nDo you want to reboot?", @("&Yes", "&No"), 1)
 
-if ($decision -eq 0) {
-	Write-host "`nRebooting now..."
-
-	Start-Sleep -Milliseconds 2000
-
-	Restart-Computer
-}
-else {
+if ($decision -eq 1) {
 	Write-ExitTimer
 }
 
-## End of script
-Exit-Script
+Write-host "`nRebooting now..."
+Restart-Computer
+
+exit
