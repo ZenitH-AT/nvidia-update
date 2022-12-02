@@ -15,9 +15,9 @@ Fork of [lord-carlos/nvidia-update](https://github.com/lord-carlos/nvidia-update
 
 - `-Clean` - Delete the existing driver and install the latest one
 - `-Msi` - Enable message-signalled interrupts (MSI) after driver installation (must be enabled every time); requires elevation
-- `-Schedule` - Register a scheduled task to periodically run this script; MSI will always be enabled if "-Msi" was also set
-- `-GpuId` - Manually specify product family (GPU) ID rather than determine automatically
-- `-OsId` - Manually specify operating system ID rather than determine automatically
+- `-Schedule` - Register a scheduled task to periodically run this script; any other arguments passed (e.g. "-Msi") will be included in the task action
+- `-GpuId <int/string>` - Manually specify product family (GPU) ID rather than determine automatically
+- `-OsId <int/string>` - Manually specify operating system ID rather than determine automatically
 - `-Desktop` - Override the desktop/notebook check and download the desktop driver; useful when using an external GPU or unable to find a driver
 - `-Notebook` - Override the desktop/notebook check and download the notebook driver
 - `-Directory <string>` - The directory where the script will download and extract the driver
@@ -33,8 +33,10 @@ Fork of [lord-carlos/nvidia-update](https://github.com/lord-carlos/nvidia-update
 You can run the following PowerShell command to download and run the script weekly:
 
 ```ps
-Invoke-Expression (Invoke-WebRequest -Uri "https://github.com/ZenitH-AT/nvidia-update/raw/master/schedule.ps1").Content
+Invoke-Expression (Invoke-WebRequest -Uri "https://github.com/ZenitH-AT/nvidia-update/raw/main/schedule.ps1").Content
 ```
+
+Any arguments passed at the end of the command will be be included in the task action.
 
 ## Requirements / Dependencies
 
