@@ -271,7 +271,7 @@ function Get-DriverLookupParameters {
 
 	if (!$GpuId) {
 		try {
-			$gpuId = (Invoke-RestMethod -Uri $gpuDataFileUrl | ConvertFrom-Json).$gpuType.$GpuName
+			$gpuId = ((Invoke-RestMethod -Uri $gpuDataFileUrl).Replace("Super", "SUPER_") | ConvertFrom-Json).$gpuType.$GpuName # TODO: Remove Replace() in the future
 		}
 		catch {
 			Write-ExitError "`nUnable to retrieve GPU data. Please try running this script again."
