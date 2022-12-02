@@ -1,14 +1,16 @@
 <#PSScriptInfo
-.VERSION 1.6
+.VERSION 1.7
 .GUID 544ddf4b-d7df-44b2-abcf-f452793c0fa7
 .AUTHOR ZenitH-AT
-.LICENSEURI https://raw.githubusercontent.com/ZenitH-AT/nvidia-update/master/LICENSE
+.LICENSEURI https://raw.githubusercontent.com/ZenitH-AT/nvidia-update/main/LICENSE
 .PROJECTURI https://github.com/ZenitH-AT/nvidia-update
 .DESCRIPTION Downloads the latest version of nvidia-update and registers a scheduled task. 
 #>
 
 ## Constant variables and functions
-New-Variable -Name "scriptVersionFileUrl" -Value "https://raw.githubusercontent.com/ZenitH-AT/nvidia-update/master/version.txt" -Option Constant
+New-Variable -Name "scriptRepoUri" -Value "$(Test-ScriptFileInfo -Path $PSCommandPath | ForEach-Object PROJECTURI)" -Option Constant
+New-Variable -Name "defaultScriptFileName" -Value "nvidia-update.ps1" -Option Constant
+New-Variable -Name "defaultConfigFileName" -Value "optional-components.cfg" -Option Constant
 
 function Write-ExitError {
 	param (
@@ -33,27 +35,27 @@ if (-not (Get-NetRoute | Where-Object DestinationPrefix -eq "0.0.0.0/0" | Get-Ne
 
 ## Register scheduled task
 $taskDir = "$($env:USERPROFILE)\nvidia-update"
-$taskPath = "$($taskDir)\nvidia-update.ps1"
+$taskPath = "$($taskDir)\$($defaultScriptFileName)"
 
-if (!(Test-Path $taskDir)) {
+if (-not (Test-Path $taskDir)) {
 	New-Item -Path $taskDir -ItemType "directory" | Out-Null
 }
 
-# Get latest script version from repository
+# Get latest release version
 try {
-	$latestScriptVersion = Invoke-WebRequest -Uri $scriptVersionFileUrl
-	$latestScriptVersion = "$($latestScriptVersion)".Trim()
+	$latestReleaseUrl = [System.Net.WebRequest]::Create("$($scriptRepoUri)/releases/latest").GetResponse().ResponseUri.OriginalString
+	$latestReleaseVersion = $latestReleaseUrl.Split("/")[-1]
 }
 catch {
 	Write-ExitError "Unable to determine latest script version. Please try running this script again."
 }
 
-$taskName = "nvidia-update $($latestScriptVersion)"
+$taskName = "nvidia-update $($latestReleaseVersion)"
 $description = "NVIDIA Driver Update"
 $scheduleDay = "Sunday"
 $scheduleTime = "12pm"
 
-$action = New-ScheduledTaskAction -Execute $powershellExe -Argument $taskPath
+$action = New-ScheduledTaskAction -Execute $powershellExe -Argument "-File `"$($taskPath)`" $($MyInvocation.UnboundArguments)"
 $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -RunOnlyIfIdle -IdleDuration 00:10:00 -IdleWaitTimeout 04:00:00
 $trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek $scheduleDay -At $scheduleTime
 
@@ -64,7 +66,7 @@ $existingTasks = Get-ScheduledTask | Where-Object TaskName -match "^nvidia-updat
 foreach ($existingTask in $existingTasks) {
 	$registerTask = $false
 
-	if ($existingTask.TaskName -notlike "*$($latestScriptVersion)") {
+	if ($existingTask.TaskName -notlike "*$($latestReleaseVersion)") {
 		Unregister-ScheduledTask -TaskName $existingTask.TaskName -Confirm:$false
 
 		$registerTask = $true
@@ -72,10 +74,10 @@ foreach ($existingTask in $existingTasks) {
 }
 
 if ($registerTask) {
-	# Download lastest script files
+	# Download latest release files
 	try {
-		Invoke-WebRequest -Uri "$($rawScriptRepo)/nvidia-update.ps1" -OutFile $taskPath
-		Invoke-WebRequest -Uri "$($rawScriptRepo)/optional-components.cfg" -OutFile "$($taskDir)\optional-components.cfg"
+		Invoke-WebRequest -Uri "$($latestReleaseUrl.Replace("tag", "download"))/$($defaultScriptFileName)" -OutFile $taskPath
+		Invoke-WebRequest -Uri "$($latestReleaseUrl.Replace("tag", "download"))/$($defaultConfigFileName)" -OutFile "$($taskDir)\$($defaultConfigFileName)"
 	}
 	catch {
 		Write-ExitError "Downloading script files failed. Please try running this script again."
@@ -96,4 +98,4 @@ if ($decision -eq 0) {
 }
 
 Write-Host "`nExiting script in 5 seconds..."
-Start-Sleep -s 5
+Start-Sleep -Milliseconds 5000
