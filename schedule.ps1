@@ -1,5 +1,5 @@
 <#PSScriptInfo
-.VERSION 1.7
+.VERSION 1.7.1
 .GUID 544ddf4b-d7df-44b2-abcf-f452793c0fa7
 .AUTHOR ZenitH-AT
 .LICENSEURI https://raw.githubusercontent.com/ZenitH-AT/nvidia-update/main/LICENSE
@@ -8,7 +8,6 @@
 #>
 
 ## Constant variables and functions
-New-Variable -Name "scriptRepoUri" -Value "$(Test-ScriptFileInfo -Path $PSCommandPath | ForEach-Object PROJECTURI)" -Option Constant
 New-Variable -Name "defaultScriptFileName" -Value "nvidia-update.ps1" -Option Constant
 New-Variable -Name "defaultConfigFileName" -Value "optional-components.cfg" -Option Constant
 
@@ -43,7 +42,7 @@ if (-not (Test-Path $taskDir)) {
 
 # Get latest release version
 try {
-	$latestReleaseUrl = [System.Net.WebRequest]::Create("$($scriptRepoUri)/releases/latest").GetResponse().ResponseUri.OriginalString
+	$latestReleaseUrl = [System.Net.WebRequest]::Create("https://github.com/ZenitH-AT/nvidia-update/releases/latest").GetResponse().ResponseUri.OriginalString
 	$latestReleaseVersion = $latestReleaseUrl.Split("/")[-1]
 }
 catch {
