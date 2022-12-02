@@ -1,5 +1,5 @@
 <#PSScriptInfo
-.VERSION 1.14
+.VERSION 1.15
 .GUID dd04650b-78dc-4761-89bf-b6eeee74094c
 .AUTHOR ZenitH-AT
 .LICENSEURI https://raw.githubusercontent.com/ZenitH-AT/nvidia-update/main/LICENSE
@@ -19,7 +19,7 @@ param (
 
 ## Constant variables and functions
 New-Variable -Name "configFilePath" -Value "$($PSScriptRoot)\optional-components.cfg" -Option Constant
-New-Variable -Name "currentScriptVersion" -Value "$(Test-ScriptFileInfo -Path $PSCommandPath | ForEach-Object VERSION)" -Option Constant
+New-Variable -Name "currentScriptVersion" -Value ([System.Version]::New("$(Test-ScriptFileInfo -Path $PSCommandPath | ForEach-Object VERSION)")) -Option Constant
 New-Variable -Name "scriptRepoUri" -Value "$(Test-ScriptFileInfo -Path $PSCommandPath | ForEach-Object PROJECTURI)" -Option Constant
 New-Variable -Name "defaultSscriptFileName" -Value "nvidia-update.ps1" -Option Constant
 New-Variable -Name "gpuDataFileUrl" -Value "https://raw.githubusercontent.com/ZenitH-AT/nvidia-data/main/gpu-data.json" -Option Constant
@@ -471,14 +471,11 @@ Write-Host "`n`tCurrent script version:`t`t$($currentScriptVersion)"
 
 try {
 	$latestScriptReleaseUrl = [System.Net.WebRequest]::Create("$($scriptRepoUri)/releases/latest").GetResponse().ResponseUri.OriginalString
-	$latestScriptVersion = $latestScriptReleaseUrl.Split("/")[-1]
+	$latestScriptVersion = [System.Version]::New($latestScriptReleaseUrl.Split("/")[-1])
 
 	Write-Host "`tLatest script version:`t`t$($latestScriptVersion)"
 
-	if ($currentScriptVersion -eq $latestScriptVersion) {
-		Write-Host "`nThis is the latest script (version $($currentScriptVersion))."
-	}
-	else {
+	if ($currentScriptVersion.CompareTo($latestScriptVersion) -lt 0) {
 		Write-Host "`nReady to download the latest script file to `"$($PSCommandPath)`"..."
 
 		if (Test-Path $configFilePath) {
