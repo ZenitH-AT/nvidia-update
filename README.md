@@ -30,13 +30,19 @@ Fork of [lord-carlos/nvidia-update](https://github.com/lord-carlos/nvidia-update
 
 ## Automatically running the script periodically
 
-You can run the following PowerShell command to download and run the script weekly:
+Run the following PowerShell command to download the latest release files and create a scheduled task to run the script weekly with no optional parameters:
 
-```ps
-Invoke-Expression (Invoke-WebRequest -Uri "https://github.com/ZenitH-AT/nvidia-update/raw/main/schedule.ps1").Content
+```ps1
+Invoke-Expression (Invoke-WebRequest -Uri "https://github.com/ZenitH-AT/nvidia-update/raw/main/schedule.ps1")
 ```
 
-Any arguments passed at the end of the command will be be included in the task action.
+To specify optional parameters for the scheduled task action, instead use a command like the following (example):
+
+```ps1
+Invoke-Command -ScriptBlock ([ScriptBlock]::Create(".{$(Invoke-WebRequest -Uri "https://github.com/ZenitH-AT/nvidia-update/raw/main/schedule.ps1")} -Force -DownloadDir `"'C:\Users\user\NVIDIA download'`""))
+```
+
+Surrounding an argument with ````"'``` and ```'`"``` is required if it has spaces.
 
 ## Requirements / Dependencies
 
