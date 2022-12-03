@@ -7,21 +7,23 @@
 .DESCRIPTION Checks for a new version of the NVIDIA driver, downloads and installs it. 
 #>
 param (
-	[switch] $Clean = $false, # Delete the existing driver and install the latest one
+	[switch] $Force = $false, # Install the driver even if the latest driver is already installed
+	[switch] $Clean = $false, # Remove any existing driver and its configuration data
 	[switch] $Msi = $false, # Enable message-signalled interrupts (MSI) after driver installation (must be enabled every time); requires elevation
 	[switch] $Schedule = $false, # Register a scheduled task to periodically run this script; arguments passed alongside this will be appended to the scheduled task
 	[string] $GpuId = $null, # Manually specify product family (GPU) ID rather than determine automatically
 	[string] $OsId = $null, # Manually specify operating system ID rather than determine automatically
 	[switch] $Desktop = $false, # Override the desktop/notebook check and download the desktop driver; useful when using an external GPU or unable to find a driver
 	[switch] $Notebook = $false, # Override the desktop/notebook check and download the notebook driver
-	[string] $Directory = "$($env:TEMP)\NVIDIA" # The directory where the script will download and extract the driver
+	[string] $DownloadDir = "$($env:TEMP)\NVIDIA", # The directory where the script will download and extract the driver package
+	[switch] $KeepDownload = $false # Don't delete the downloaded driver package after installation (or if an error occurred)
 )
 
 ## Constant variables and functions
 New-Variable -Name "configFilePath" -Value "$($PSScriptRoot)\optional-components.cfg" -Option Constant
-New-Variable -Name "currentScriptVersion" -Value ([System.Version]::New("$(Test-ScriptFileInfo -Path $PSCommandPath | ForEach-Object VERSION)")) -Option Constant
+New-Variable -Name "currentReleaseVersion" -Value ([System.Version]::New("$(Test-ScriptFileInfo -Path $PSCommandPath | ForEach-Object VERSION)")) -Option Constant
 New-Variable -Name "scriptRepoUri" -Value "$(Test-ScriptFileInfo -Path $PSCommandPath | ForEach-Object PROJECTURI)" -Option Constant
-New-Variable -Name "defaultSscriptFileName" -Value "nvidia-update.ps1" -Option Constant
+New-Variable -Name "defaultScriptFileName" -Value "nvidia-update.ps1" -Option Constant
 New-Variable -Name "gpuDataFileUrl" -Value "https://raw.githubusercontent.com/ZenitH-AT/nvidia-data/main/gpu-data.json" -Option Constant
 New-Variable -Name "osDataFileUrl" -Value "https://raw.githubusercontent.com/ZenitH-AT/nvidia-data/main/os-data.json" -Option Constant
 New-Variable -Name "driverLookupUri" -Value "https://gfwsl.geforce.com/services_toolkit/services/com/nvidia/services/AjaxDriverService.php?func=DriverManualLookup&pfid={0}&osID={1}&dch={2}" -Option Constant
@@ -32,12 +34,12 @@ New-Variable -Name "dataDividends" -Value @(1, 1024, 1048576) -Option Constant
 New-Variable -Name "dataUnits" -Value @("B", "KiB", "MiB") -Option Constant
 
 function Remove-Temp {
-	if (Test-Path $Directory) {
+	if (Test-Path $DownloadDir) {
 		try {
-			Remove-Item $Directory -Recurse -Force -ErrorAction Ignore
+			Get-ChildItem -Path $DownloadDir -Exclude "$(if ($KeepDownload) { "*exe" })" | Remove-Item -Recurse -Force -ErrorAction Ignore
 		}
 		catch {
-			Write-Host "Some files located at $($Directory) could not be deleted, you may want to remove them manually later." -ForegroundColor Gray
+			Write-Host "Some files located at $($DownloadDir) could not be deleted, you may want to remove them manually later." -ForegroundColor Gray
 		}
 	}
 }
@@ -52,7 +54,7 @@ function Write-ExitError {
 
 	if ($RemoveTemp) {
 		Write-Host "`nRemoving temporary files..."
-		Remove-Temp $Directory
+		Remove-Temp
 		Write-Host # Only write new line after any potential error message from Remove-Temp
 	}
 
@@ -327,7 +329,7 @@ function Get-DriverDownloadInfo {
 	try {
 		$payload = Invoke-RestMethod -Uri ($driverLookupUri -f $GpuId, $OsId, [int]$Dch)
 
-		if (-not $payload.Success -eq 1) {
+		if ($payload.Success -ne 1) {
 			return $null
 		}
 
@@ -416,7 +418,7 @@ function Start-Installation {
 
 ## Register scheduled task if the "-Schedule" parameter is set
 if ($Schedule) {
-	$taskName = "nvidia-update $($currentScriptVersion)"
+	$taskName = "nvidia-update $($currentReleaseVersion)"
 	$description = "NVIDIA Driver Update"
 	$scheduleDay = "Sunday"
 	$scheduleTime = "12pm"
@@ -425,25 +427,12 @@ if ($Schedule) {
 	$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -RunOnlyIfIdle -IdleDuration 00:10:00 -IdleWaitTimeout 04:00:00
 	$trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek $scheduleDay -At $scheduleTime
 
-	# Register task if it doesn't already exist or if it references a different script version (and delete outdated tasks)
-	$registerTask = $true
-
-	$existingTasks = Get-ScheduledTask | Where-Object TaskName -match "^nvidia-update."
-
-	foreach ($existingTask in $existingTasks) {
-		$registerTask = $false
-
-		if ($existingTask.TaskName -notlike "*$($currentScriptVersion)") {
-			Unregister-ScheduledTask -TaskName $existingTask.TaskName -Confirm:$false
-	
-			$registerTask = $true
-		}
+	# Unregister any existing nvidia-update tasks
+	foreach ($existingTask in Get-ScheduledTask | Where-Object TaskName -match "^nvidia-update.") {
+		Unregister-ScheduledTask -TaskName $existingTask.TaskName -Confirm:$false
 	}
 
-	if ($registerTask) {
-		Register-ScheduledTask -TaskName $taskName -Action $action -Settings $settings -Trigger $trigger -Description $description > $null
-	}
-
+	Register-ScheduledTask -TaskName $taskName -Action $action -Settings $settings -Trigger $trigger -Description $description > $null
 	Write-Host "This script is scheduled to run every $($scheduleDay) at $($scheduleTime).`n"
 }
 
@@ -467,15 +456,15 @@ if (-not (Get-NetRoute | Where-Object DestinationPrefix -eq "0.0.0.0/0" | Get-Ne
 
 ## Check for script update and replace script if applicable
 Write-Host "Checking for script update..."
-Write-Host "`n`tCurrent script version:`t`t$($currentScriptVersion)"
+Write-Host "`n`tCurrent script version:`t`t$($currentReleaseVersion)"
 
 try {
-	$latestScriptReleaseUrl = [System.Net.WebRequest]::Create("$($scriptRepoUri)/releases/latest").GetResponse().ResponseUri.OriginalString
-	$latestScriptVersion = [System.Version]::New($latestScriptReleaseUrl.Split("/")[-1])
+	$latestReleaseUrl = [System.Net.WebRequest]::Create("$($scriptRepoUri)/releases/latest").GetResponse().ResponseUri.OriginalString
+	$latestReleaseVersion = [System.Version]::New($latestReleaseUrl.Split("/")[-1])
 
-	Write-Host "`tLatest script version:`t`t$($latestScriptVersion)"
+	Write-Host "`tLatest script version:`t`t$($latestReleaseVersion)"
 
-	if ($currentScriptVersion.CompareTo($latestScriptVersion) -lt 0) {
+	if ($currentReleaseVersion.CompareTo($latestReleaseVersion) -lt 0) {
 		Write-Host "`nReady to download the latest script file to `"$($PSCommandPath)`"..."
 
 		if (Test-Path $configFilePath) {
@@ -486,8 +475,8 @@ try {
 
 		if ($decision -eq 0) {
 			# Download new script to temporary folder
-			$scriptFileUrl = "$($latestScriptReleaseUrl.Replace("tag", "download"))/$($defaultSscriptFileName)"
-			$scriptDownloadPath = "$($env:TEMP)\$($defaultSscriptFileName)"
+			$scriptFileUrl = "$($latestReleaseUrl.Replace("tag", "download"))/$($defaultScriptFileName)"
+			$scriptDownloadPath = "$($env:TEMP)\$($defaultScriptFileName)"
 
 			Write-Host "`nDownloading latest script file..."
 			Get-WebFile $scriptFileUrl $scriptDownloadPath
@@ -496,7 +485,7 @@ try {
 			Copy-Item $scriptDownloadPath -Destination $PSCommandPath
 			Remove-Item $scriptDownloadPath -Force
 
-			# Run new script with the same arguments; include -Schedule if a scheduled task is registered to update the task
+			# Run new script with the same arguments; include -Schedule if a scheduled task is already registered, to update the task
 			$argumentList = "$($MyInvocation.UnboundArguments)$(if (Get-ScheduledTask | Where-Object TaskName -match "^nvidia-update .") { " -Schedule" })"
 
 			Start-Process -FilePath $powershellExe -ArgumentList "-File `"$($PSCommandPath)`" $($argumentList)"
@@ -611,12 +600,12 @@ if (-not $archiverPath) {
 }
 
 ## Compare installed driver version to latest driver version
-if (-not $Clean -and -not $dchAvailableAndUsingNonDchDriver -and $currentDriverVersion -eq $latestDriverVersion) {
+if (-not $Force -and -not $dchAvailableAndUsingNonDchDriver -and $currentDriverVersion -eq $latestDriverVersion) {
 	Write-ExitError "`nThe latest driver (version $($currentDriverVersion)) is already installed."
 }
 
 ## Offer driver download and installation
-$driverDownloadPath = "$($Directory)\install.exe"
+$driverDownloadPath = "$($DownloadDir)\install.exe"
 
 Write-Host "`nReady to download the latest driver installer to `"$($driverDownloadPath)`"..."
 
@@ -638,8 +627,8 @@ if ($decision -eq $options.Length - 1) {
 }
 
 ## Create/recreate temporary folder and download the installer
-Remove-Temp $Directory
-New-Item -Path $Directory -ItemType "directory" > $null
+Remove-Temp
+New-Item -Path $DownloadDir -ItemType "directory" > $null
 
 Write-Time
 Write-Host "Downloading latest driver installer..."
@@ -653,7 +642,7 @@ Get-WebFile $driverDownloadUrl $driverDownloadPath
 Write-Time
 Write-Host "Extracting driver files..."
 
-$extractDir = "$($Directory)\driver"
+$extractDir = "$($DownloadDir)\driver"
 $filesToExtract = "Display.Driver NVI2 EULA.txt ListDevices.txt setup.cfg setup.exe"
 
 if (Test-Path $configFilePath) {
@@ -695,7 +684,7 @@ if ($cancelled) {
 	Write-ExitError "Driver installation cancelled." -RemoveTemp
 }
 
-## Remove temporary (downloaded) files
+# Installation complete; remove temporary driver installer files
 Write-Host "`nRemoving temporary files..."
 Remove-Temp
 
