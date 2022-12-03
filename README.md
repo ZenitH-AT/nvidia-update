@@ -6,21 +6,22 @@ Fork of [lord-carlos/nvidia-update](https://github.com/lord-carlos/nvidia-update
 
 ## Usage
 
-- Download the [latest release](https://github.com/ZenitH-AT/nvidia-update/releases/latest) or pull `nvidia-update.ps1` and `optional-components.cfg` (optional; allows the user to specify what optional components to include, such as PhysX)
-- If `optional-components.cfg` was downloaded, edit the file based on your preferences (similar to [NVSlimmer](https://forums.guru3d.com/threads/nvslimmer-nvidia-driver-slimming-utility.423072); by default most components are commented out).
-- Right click `nvidia-update.ps1` and select `Run with PowerShell` (or run with optional parameters)
-- If the script finds a newer version of the NVIDIA driver, it will download and install a slimmed version of it.
+- Download the [latest release](https://github.com/ZenitH-AT/nvidia-update/releases/latest); `optional-components.cfg` is optional
+- If downloaded, modify `optional-components.cfg` to specify what optional components to include (e.g. PhysX; works like [NVSlimmer](https://forums.guru3d.com/threads/nvslimmer-nvidia-driver-slimming-utility.423072))
+	- If this file isn't present in the same directory as the script, only essential driver components (not listed in this file) will be installed
+- Right click `nvidia-update.ps1` and select `Run with PowerShell` (or run with optional parameters via a terminal; see below)
+- If the script finds a newer version of the NVIDIA driver, it will download and install it
 
 ### Optional parameters
 
-- `-Clean` - Delete the existing driver and install the latest one
+- `-Clean` - Remove any existing driver and its configuration data
 - `-Msi` - Enable message-signalled interrupts (MSI) after driver installation (must be enabled every time); requires elevation
-- `-Schedule` - Register a scheduled task to periodically run this script; any other arguments passed (e.g. "-Msi") will be included in the task action
-- `-GpuId <int/string>` - Manually specify product family (GPU) ID rather than determine automatically
-- `-OsId <int/string>` - Manually specify operating system ID rather than determine automatically
+- `-Schedule` - Register a scheduled task to run this script weekly; arguments passed alongside this will be appended to the scheduled task action
+- `-GpuId <string/int>` - Manually specify product family (GPU) ID rather than determine automatically
+- `-OsId <string/int>` - Manually specify operating system ID rather than determine automatically
 - `-Desktop` - Override the desktop/notebook check and download the desktop driver; useful when using an external GPU or unable to find a driver
 - `-Notebook` - Override the desktop/notebook check and download the notebook driver
-- `-Directory <string>` - The directory where the script will download and extract the driver
+- `-DownloadDir <string>` - The directory where the script will download and extract the driver package
 
 ### How to pass optional parameters
 
@@ -42,7 +43,7 @@ To specify optional parameters for the scheduled task action, instead use a comm
 Invoke-Command -ScriptBlock ([ScriptBlock]::Create(".{$(Invoke-WebRequest -Uri "https://github.com/ZenitH-AT/nvidia-update/raw/main/schedule.ps1")} -Force -DownloadDir `"'C:\Users\user\NVIDIA download'`""))
 ```
 
-Surrounding an argument with ```"'`` and ``'`"`` is required if it has spaces.
+Surrounding an argument with `` `"' `` and `` '`" `` is required if it has spaces.
 
 ## Requirements / Dependencies
 
@@ -68,7 +69,7 @@ The pfid and osID are determined by reading files in the [ZenitH-AT/nvidia-data]
 - Getting the download link now uses NVIDIA's AjaxDriverService. DCH drivers are now supported and there is no risk of the script not working if NVIDIA changes the download URL format. RP packages are not supported.
 - The GPU's product family ID (pfid) and operating system ID (osID) can now be determined by reading files in the [ZenitH-AT/nvidia-data](https://github.com/ZenitH-AT/nvidia-data) repository, rather than using static values, as older GPUs may use different drivers.
 - The user can now choose what optional driver components to include in the installation using the optional-components.cfg file.
-- The user can now enable message-signalled interrupts after driver installation by setting the "`-Msi`" optional parameter.
+- The user can now enable message-signalled interrupts after driver installation by setting the `-Msi` optional parameter.
 - Simplified and improved checking whether to use the desktop or notebook driver and implemented parameters to override the check.
 - Simplified and improved the archiver program check, download and installation.
 - Simplified the OS version and architecture (`$osBits`) check and driver version comparison.
