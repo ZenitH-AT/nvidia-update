@@ -42,7 +42,7 @@ To specify optional parameters for the scheduled task action, instead use a comm
 Invoke-Command -ScriptBlock ([ScriptBlock]::Create(".{$(Invoke-WebRequest -Uri "https://github.com/ZenitH-AT/nvidia-update/raw/main/schedule.ps1")} -Force -DownloadDir `"'C:\Users\user\NVIDIA download'`""))
 ```
 
-Surrounding an argument with ````"'``` and ```'`"``` is required if it has spaces.
+Surrounding an argument with ``\`"'`` and ``'\`"`` is required if it has spaces.
 
 ## Requirements / Dependencies
 
