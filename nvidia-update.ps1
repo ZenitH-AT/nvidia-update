@@ -10,7 +10,7 @@ param (
 	[switch] $Force = $false, # Install the driver even if the latest driver is already installed
 	[switch] $Clean = $false, # Remove any existing driver and its configuration data
 	[switch] $Msi = $false, # Enable message-signalled interrupts (MSI) after driver installation (must be enabled every time); requires elevation
-	[switch] $Schedule = $false, # Register a scheduled task to periodically run this script; arguments passed alongside this will be appended to the scheduled task
+	[switch] $Schedule = $false, # Register a scheduled task to run this script weekly; arguments passed alongside this will be appended to the scheduled task action
 	[string] $GpuId = $null, # Manually specify product family (GPU) ID rather than determine automatically
 	[string] $OsId = $null, # Manually specify operating system ID rather than determine automatically
 	[switch] $Desktop = $false, # Override the desktop/notebook check and download the desktop driver; useful when using an external GPU or unable to find a driver
@@ -34,13 +34,15 @@ New-Variable -Name "dataDividends" -Value @(1, 1024, 1048576) -Option Constant
 New-Variable -Name "dataUnits" -Value @("B", "KiB", "MiB") -Option Constant
 
 function Remove-Temp {
-	if (Test-Path $DownloadDir) {
-		try {
-			Get-ChildItem -Path $DownloadDir -Exclude "$(if ($KeepDownload) { "*exe" })" | Remove-Item -Recurse -Force -ErrorAction Ignore
-		}
-		catch {
-			Write-Host "Some files located at $($DownloadDir) could not be deleted, you may want to remove them manually later." -ForegroundColor Gray
-		}
+	if (-not (Test-Path $DownloadDir)) {
+		return
+	}
+
+	try {
+		Get-ChildItem -Path $DownloadDir -Exclude "$(if ($KeepDownload) { "*exe" })" | Remove-Item -Recurse -Force -ErrorAction Ignore
+	}
+	catch {
+		Write-Host "Some files located at $($DownloadDir) could not be deleted, you may want to remove them manually later." -ForegroundColor Gray
 	}
 }
 
@@ -347,7 +349,7 @@ function Get-RegistryValueData {
 		[Parameter(Position = 2)] [string] $DataSuffix
 	)
 
-	if (Test-Path $Key) {
+	if (Get-ItemProperty $Key $Value -ErrorAction Ignore) {
 		return "$(Get-ItemPropertyValue -Path $Key -Name $Value)$($DataSuffix)"
 	}
 
@@ -547,7 +549,7 @@ catch {
 }
 
 ## Get archiver (7-Zip or WinRAR) executable path and argument list
-$archiverPath = Get-RegistryValueData "HKLM:\SOFTWARE\7-Zip" "Path64" "7z.exe"
+$archiverPath = Get-RegistryValueData "HKLM:\SOFTWARE\7-Zip" "Path" "7z.exe"
 $extractionArgumentList = "x -bso0 -bsp1 -bse1 `"{0}`" -o`"{1}`" {2}"
 
 if (-not $archiverPath) {
@@ -581,7 +583,7 @@ if (-not $archiverPath) {
 		Get-WebFile $archiverDownloadUrl $archiverDownloadPath
 
 		$argumentList = "/S"
-		$installingMessage = "Installing 7-zip..."
+		$installingMessage = "Installing 7-Zip..."
 		$errorMessage = "`nUAC prompt declined or an error occurred during installation."
 
 		$cancelled = Start-Installation $archiverDownloadPath $argumentList $installingMessage $errorMessage
@@ -596,6 +598,8 @@ if (-not $archiverPath) {
 
 		Write-Time
 		Write-Host "7-Zip installed." -ForegroundColor Green
+
+		$archiverPath = Get-RegistryValueData "HKLM:\SOFTWARE\7-Zip" "Path" "7z.exe"
 	}
 }
 
@@ -655,7 +659,6 @@ try {
 	Start-Process -FilePath $archiverPath -NoNewWindow -ArgumentList ($extractionArgumentList -f $driverDownloadPath, $extractDir, $filesToExtract) -Wait
 }
 catch {
-	Write-Host $_
 	Write-ExitError "`nAn error occurred while extracting driver files."
 }
 
