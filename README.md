@@ -7,13 +7,14 @@ Fork of [lord-carlos/nvidia-update](https://github.com/lord-carlos/nvidia-update
 ## Usage
 
 - Download the [latest release](https://github.com/ZenitH-AT/nvidia-update/releases/latest); `optional-components.cfg` is optional
-- If downloaded, modify `optional-components.cfg` to specify what optional components to include (e.g. PhysX; works like [NVSlimmer](https://forums.guru3d.com/threads/nvslimmer-nvidia-driver-slimming-utility.423072))
+- If downloaded, modify `optional-components.cfg` to specify what optional components to include (e.g., PhysX; works like [NVSlimmer](https://forums.guru3d.com/threads/nvslimmer-nvidia-driver-slimming-utility.423072))
 	- If this file isn't present in the same directory as the script, only essential driver components (not listed in this file) will be installed
 - Right click `nvidia-update.ps1` and select `Run with PowerShell` (or run with optional parameters via a terminal; see below)
 - If the script finds a newer version of the NVIDIA driver, it will download and install it
 
 ### Optional parameters
 
+- `-Force` - Install the driver even if the latest driver is already installed
 - `-Clean` - Remove any existing driver and its configuration data
 - `-Msi` - Enable message-signalled interrupts (MSI) after driver installation (must be enabled every time); requires elevation
 - `-Schedule` - Register a scheduled task to run this script weekly; arguments passed alongside this will be appended to the scheduled task action
@@ -21,7 +22,9 @@ Fork of [lord-carlos/nvidia-update](https://github.com/lord-carlos/nvidia-update
 - `-OsId <string/int>` - Manually specify operating system ID rather than determine automatically
 - `-Desktop` - Override the desktop/notebook check and download the desktop driver; useful when using an external GPU or unable to find a driver
 - `-Notebook` - Override the desktop/notebook check and download the notebook driver
-- `-DownloadDir <string>` - The directory where the script will download and extract the driver package
+- `-DownloadDirectory <string>` - The directory where the script will download and extract the driver package
+- `-KeepDownload` - Don't delete the downloaded driver package after installation (or if an error occurred)
+- `-AjaxDriverServiceUrl` - AjaxDriverService URL; e.g., replace .com with .com to solve connectivity issues
 
 ### How to pass optional parameters
 
@@ -37,10 +40,10 @@ Run the following PowerShell command to download the latest release files and cr
 Invoke-Expression (Invoke-WebRequest -Uri "https://github.com/ZenitH-AT/nvidia-update/raw/main/schedule.ps1")
 ```
 
-To specify optional parameters for the scheduled task action, instead use a command like the following (example):
+To specify optional parameters for the scheduled task action, run a command similar to the following example, instead:
 
 ```ps1
-Invoke-Command -ScriptBlock ([ScriptBlock]::Create(".{$(Invoke-WebRequest -Uri "https://github.com/ZenitH-AT/nvidia-update/raw/main/schedule.ps1")} -Force -DownloadDir `"'C:\Users\user\NVIDIA download'`""))
+Invoke-Command ([ScriptBlock]::Create(".{$(Invoke-WebRequest -Uri "https://github.com/ZenitH-AT/nvidia-update/raw/main/schedule.ps1")} -Force -DownloadDir `"'C:\Users\user\NVIDIA download'`""))
 ```
 
 Surrounding an argument with `` `"' `` and `` '`" `` is required if it has spaces.
@@ -57,8 +60,8 @@ Example:
 
 `https://gfwsl.geforce.com/services_toolkit/services/com/nvidia/services/AjaxDriverService.php?func=DriverManualLookup&pfid=877&osID=57&dch=1`
 
-- **pfid**: Product Family (GPU) ID (e.g. _GeForce RTX 3070_: 933)
-- **osID**: Operating System ID (e.g. _Windows 10 64-bit_: 57)
+- **pfid**: Product Family (GPU) ID (e.g., _GeForce RTX 3070_: 933)
+- **osID**: Operating System ID (e.g., _Windows 10 64-bit_: 57)
 - **dch**: Windows Driver Type (_Standard_: 0; _DCH_: 1)
 
 The pfid and osID are determined by reading files in the [ZenitH-AT/nvidia-data](https://github.com/ZenitH-AT/nvidia-data) repository, which queries the NVIDIA Download API ([lookupValueSearch](https://www.nvidia.com/Download/API/lookupValueSearch.aspx)).
@@ -79,7 +82,7 @@ The pfid and osID are determined by reading files in the [ZenitH-AT/nvidia-data]
 - Implemented a function for downloading files (`Get-WebFile`).
 	- Driver downloading now uses this function, rather than `Start-BitsTransfer`, which occasionally [caused issues](https://i.imgur.com/TcCenpo.png).
 - Greatly improved error handling (script is now hopefully idiot-proof).
-- Loading animations are shown where applicable (e.g. "Installing driver... /").
+- Loading animations are shown where applicable (e.g., "Installing driver... /").
 - Refactored and reorganised a ton of the code.
 - Implemented a few changes and fixes from the [BearGrylls](https://github.com/BearGrylls/nvidia-update) and [fl4pj4ck](https://github.com/fl4pj4ck/nvidia-update) forks, as well as [TinyNvidiaUpdateChecker](https://github.com/ElPumpo/TinyNvidiaUpdateChecker)
 

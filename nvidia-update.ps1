@@ -15,8 +15,9 @@ param (
 	[string] $OsId = $null, # Manually specify operating system ID rather than determine automatically
 	[switch] $Desktop = $false, # Override the desktop/notebook check and download the desktop driver; useful when using an external GPU or unable to find a driver
 	[switch] $Notebook = $false, # Override the desktop/notebook check and download the notebook driver
-	[string] $DownloadDir = "$($env:TEMP)\NVIDIA", # The directory where the script will download and extract the driver package
-	[switch] $KeepDownload = $false # Don't delete the downloaded driver package after installation (or if an error occurred)
+	[string] $DownloadDirectory = "$($env:TEMP)\NVIDIA", # The directory where the script will download and extract the driver package;
+	[switch] $KeepDownload = $false, # Don't delete the downloaded driver package after installation (or if an error occurred)
+	[string] $AjaxDriverServiceUrl = "https://gfwsl.geforce.com/services_toolkit/services/com/nvidia/services/AjaxDriverService.php" # AjaxDriverService URL; e.g., replace .com with .com to solve connectivity issues
 )
 
 ## Constant variables and functions
@@ -26,7 +27,7 @@ New-Variable -Name "scriptRepoUri" -Value "$(Test-ScriptFileInfo -Path $PSComman
 New-Variable -Name "defaultScriptFileName" -Value "nvidia-update.ps1" -Option Constant
 New-Variable -Name "gpuDataFileUrl" -Value "https://raw.githubusercontent.com/ZenitH-AT/nvidia-data/main/gpu-data.json" -Option Constant
 New-Variable -Name "osDataFileUrl" -Value "https://raw.githubusercontent.com/ZenitH-AT/nvidia-data/main/os-data.json" -Option Constant
-New-Variable -Name "driverLookupUri" -Value "https://gfwsl.geforce.com/services_toolkit/services/com/nvidia/services/AjaxDriverService.php?func=DriverManualLookup&pfid={0}&osID={1}&dch={2}" -Option Constant
+New-Variable -Name "driverLookupUri" -Value "$($AjaxDriverServiceUrl)?func=DriverManualLookup&pfid={0}&osID={1}&dch={2}" -Option Constant
 New-Variable -Name "osBits" -Value "$(if ([Environment]::Is64BitOperatingSystem) { 64 } else { 32 })" -Option Constant
 New-Variable -Name "notebookChassisTypes" -Value @(8, 9, 10, 11, 12, 14, 18, 21, 31, 32) -Option Constant
 New-Variable -Name "dchSupportedOsIds" -Value @(56, 57, 135) -Option Constant
@@ -34,15 +35,15 @@ New-Variable -Name "dataDividends" -Value @(1, 1024, 1048576) -Option Constant
 New-Variable -Name "dataUnits" -Value @("B", "KiB", "MiB") -Option Constant
 
 function Remove-Temp {
-	if (-not (Test-Path $DownloadDir)) {
+	if (-not (Test-Path $DownloadDirectory)) {
 		return
 	}
 
 	try {
-		Get-ChildItem -Path $DownloadDir -Exclude "$(if ($KeepDownload) { "*exe" })" | Remove-Item -Recurse -Force -ErrorAction Ignore
+		Get-ChildItem -Path $DownloadDirectory -Exclude "$(if ($KeepDownload) { "*exe" })" | Remove-Item -Recurse -Force -ErrorAction Ignore
 	}
 	catch {
-		Write-Host "Some files located at $($DownloadDir) could not be deleted, you may want to remove them manually later." -ForegroundColor Gray
+		Write-Host "Some files located at $($DownloadDirectory) could not be deleted, you may want to remove them manually later." -ForegroundColor Gray
 	}
 }
 
@@ -237,11 +238,10 @@ function Get-GpuData {
 	$gpus = @(Get-CimInstance Win32_VideoController | Select-Object PNPDeviceID, Name, DriverVersion)
 
 	foreach ($gpu in $gpus) {
-		$pnpDeviceId = $gpu.PNPDeviceID
 		$gpuName = $gpu.Name
 
 		if ($gpuName -match "^NVIDIA") {
-			# Clean GPU name, accounting for card variants (e.g. 1060 6GB, 760Ti (OEM))
+			# Clean GPU name, accounting for card variants (e.g., 1060 6GB, 760Ti (OEM))
 			if (-not ($gpuName -match "(?<=NVIDIA )(.*(?= [0-9]+GB)|.*(?= with Max-Q Design)|.*(?= \([A-Z]+\))|.*)")) {
 				Write-ExitError "`nUnrecognised GPU name $($gpuName). This should not happen."
 			}
@@ -249,17 +249,17 @@ function Get-GpuData {
 			$gpuName = $Matches[0].Replace("Super", "SUPER").Trim()
 			$currentDriverVersion = ($gpu.DriverVersion.Replace(".", "")[-5..-1] -join "").Insert(3, ".")
 			$isNotebook = [bool](Get-CimInstance -ClassName Win32_SystemEnclosure).ChassisTypes.Where({ $_ -in $notebookChassisTypes })
-			$compatibleGpuFound = $true
+			$pnpDeviceId = $gpu.PNPDeviceID
 
 			break
 		}
 	}
 
-	if (-not $compatibleGpuFound) {
+	if (-not $currentDriverVersion) {
 		Write-ExitError "`nUnable to detect a compatible NVIDIA device."
 	}
 
-	return $pnpDeviceId, $gpuName, $currentDriverVersion, $isNotebook
+	return $gpuName, $currentDriverVersion, $isNotebook, $pnpDeviceId
 }
 
 function Get-DriverLookupParameters {
@@ -275,7 +275,7 @@ function Get-DriverLookupParameters {
 
 	if (!$GpuId) {
 		try {
-			$gpuId = (Invoke-RestMethod -Uri $gpuDataFileUrl | ConvertFrom-Json).$gpuType.$GpuName
+			$gpuId = (Invoke-RestMethod -Uri $gpuDataFileUrl | ConvertTo-Json | ConvertFrom-Json).$gpuType.$GpuName
 		}
 		catch {
 			Write-ExitError "`nUnable to retrieve GPU data. Please try running this script again."
@@ -513,12 +513,12 @@ catch {
 try {
 	Write-Host "`nDetecting GPU and driver version information..."
 
-	$pnpDeviceId, $gpuName, $currentDriverVersion, $isNotebook = Get-GpuData
+	$gpuName, $currentDriverVersion, $isNotebook, $pnpDeviceId = Get-GpuData
 
 	Write-Host "`n`tDetected graphics card name:`t$($gpuName)"
 	Write-Host "`tCurrent driver version:`t`t$($currentDriverVersion)"
 
-	$gpuId, $osId, $dchSupported, $dch = Get-DriverLookupParameters $GpuName $IsNotebook
+	$gpuId, $osId, $dchSupported, $dch = Get-DriverLookupParameters $gpuName $isNotebook
 	$driverDownloadInfo = Get-DriverDownloadInfo $gpuId $osId $dch
 
 	if ($driverDownloadInfo) {
@@ -609,7 +609,7 @@ if (-not $Force -and -not $dchAvailableAndUsingNonDchDriver -and $currentDriverV
 }
 
 ## Offer driver download and installation
-$driverDownloadPath = "$($DownloadDir)\install.exe"
+$driverDownloadPath = "$($DownloadDirectory)\install.exe"
 
 Write-Host "`nReady to download the latest driver installer to `"$($driverDownloadPath)`"..."
 
@@ -632,7 +632,7 @@ if ($decision -eq $options.Length - 1) {
 
 ## Create/recreate temporary folder and download the installer
 Remove-Temp
-New-Item -Path $DownloadDir -ItemType "directory" > $null
+New-Item -Path $DownloadDirectory -ItemType "directory" > $null
 
 Write-Time
 Write-Host "Downloading latest driver installer..."
@@ -646,7 +646,7 @@ Get-WebFile $driverDownloadUrl $driverDownloadPath
 Write-Time
 Write-Host "Extracting driver files..."
 
-$extractDir = "$($DownloadDir)\driver"
+$extractDir = "$($DownloadDirectory)\driver"
 $filesToExtract = "Display.Driver NVI2 EULA.txt ListDevices.txt setup.cfg setup.exe"
 
 if (Test-Path $configFilePath) {
@@ -717,5 +717,3 @@ if ($decision -eq 1) {
 
 Write-host "`nRebooting now..."
 Restart-Computer
-
-exit
