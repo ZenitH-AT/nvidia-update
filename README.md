@@ -24,7 +24,7 @@ Fork of [lord-carlos/nvidia-update](https://github.com/lord-carlos/nvidia-update
 - `-Notebook` - Override the desktop/notebook check and download the notebook driver
 - `-DownloadDirectory <string>` - The directory where the script will download and extract the driver package
 - `-KeepDownload` - Don't delete the downloaded driver package after installation (or if an error occurred)
-- `-AjaxDriverServiceUrl` - AjaxDriverService URL; e.g., replace .com with .cn to solve connectivity issues
+- `-AjaxDriverServiceUrl` - AjaxDriverService URL; e.g., replace ".com" in the default value ("https://gfwsl.geforce.com/services_toolkit/services/com/nvidia/services/AjaxDriverService.php") with ".cn" to solve connectivity issues
 
 ### How to pass optional parameters
 

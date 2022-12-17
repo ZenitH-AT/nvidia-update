@@ -17,7 +17,7 @@ param (
 	[switch] $Notebook = $false, # Override the desktop/notebook check and download the notebook driver
 	[string] $DownloadDirectory = "$($env:TEMP)\NVIDIA", # The directory where the script will download and extract the driver package;
 	[switch] $KeepDownload = $false, # Don't delete the downloaded driver package after installation (or if an error occurred)
-	[string] $AjaxDriverServiceUrl = "https://gfwsl.geforce.com/services_toolkit/services/com/nvidia/services/AjaxDriverService.php" # AjaxDriverService URL; e.g., replace .com with .cn to solve connectivity issues
+	[string] $AjaxDriverServiceUrl = "https://gfwsl.geforce.com/services_toolkit/services/com/nvidia/services/AjaxDriverService.php" # AjaxDriverService URL; e.g., replace ".com" with ".cn" to solve connectivity issues
 )
 
 ## Constant variables and functions
