@@ -316,7 +316,7 @@ function Get-DriverLookupParameters {
 
 	# Check if DCH supported and if using DCH driver
 	$dchSupported = $osId -in $dchSupportedOsIds
-	$dch = $osId -in $dchSupportedOsIds -and (Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\nvlddmkm" -Name "DCHUVen" -ErrorAction Ignore)
+	$dch = $dchSupported -and (Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\nvlddmkm" -Name "DCHUVen" -ErrorAction Ignore)
 
 	return $gpuId, $osId, $dchSupported, $dch
 }
