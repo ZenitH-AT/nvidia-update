@@ -242,7 +242,7 @@ function Get-GpuData {
 
 		if ($gpuName -match "^NVIDIA") {
 			# Clean GPU name, accounting for card variants (e.g., 1060 6GB, 760Ti (OEM))
-			if (-not ($gpuName -match "(?<=NVIDIA )(.*(?= [0-9]+GB)|.*(?= with Max-Q Design)|.*(?= \([A-Z]+\))|.*)")) {
+			if (-not ($gpuName -match "(?<=NVIDIA )(.*(?= \([A-Z]+\))|.*(?= [0-9]+GB)|.*(?= with Max-Q Design)|.*(?= COLLECTORS EDITION)|.*)")) {
 				Write-ExitError "`nUnrecognised GPU name $($gpuName). This should not happen."
 			}
 
