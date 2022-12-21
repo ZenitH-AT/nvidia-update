@@ -236,7 +236,7 @@ function Get-WebFile {
 }
 
 function Get-GpuData {
-	$gpus = @(Get-CimInstance Win32_VideoController | Select-Object PNPDeviceID, Name, DriverVersion)
+	$gpus = @(Get-CimInstance Win32_VideoController | Select-Object Name, DriverVersion, PNPDeviceID)
 
 	foreach ($gpu in $gpus) {
 		$gpuName = $gpu.Name
@@ -249,7 +249,6 @@ function Get-GpuData {
 
 			$gpuName = $Matches[0].Replace("Super", "SUPER").Trim()
 			$currentDriverVersion = ($gpu.DriverVersion.Replace(".", "")[-5..-1] -join "").Insert(3, ".")
-			$isNotebook = [bool](Get-CimInstance -ClassName Win32_SystemEnclosure).ChassisTypes.Where({ $_ -in $notebookChassisTypes })
 			$pnpDeviceId = $gpu.PNPDeviceID
 
 			break
@@ -260,15 +259,15 @@ function Get-GpuData {
 		Write-ExitError "`nUnable to detect a compatible NVIDIA device."
 	}
 
-	return $gpuName, $currentDriverVersion, $isNotebook, $pnpDeviceId
+	return $gpuName, $currentDriverVersion, $pnpDeviceId
 }
 
 function Get-DriverLookupParameters {
 	param (
-		[Parameter(Position = 0, Mandatory)] [ValidateNotNullOrEmpty()] [string] $GpuName,
-		[Parameter(Position = 1, Mandatory)] [ValidateNotNullOrEmpty()] [bool] $IsNotebook
+		[Parameter(Mandatory)] [ValidateNotNullOrEmpty()] [string] $GpuName
 	)
 
+	$isNotebook = [bool](Get-CimInstance -ClassName Win32_SystemEnclosure).ChassisTypes.Where({ $_ -in $notebookChassisTypes })
 	$gpuType = if ($Desktop -or -not ($Notebook -or $IsNotebook)) { "desktop" } else { "notebook" }
 
 	# Determine product family (GPU) ID
@@ -514,12 +513,12 @@ catch {
 try {
 	Write-Host "`nDetecting GPU and driver version information..."
 
-	$gpuName, $currentDriverVersion, $isNotebook, $pnpDeviceId = Get-GpuData
+	$gpuName, $currentDriverVersion, $pnpDeviceId = Get-GpuData
 
 	Write-Host "`n`tDetected graphics card name:`t$($gpuName)"
 	Write-Host "`tCurrent driver version:`t`t$($currentDriverVersion)"
 
-	$gpuId, $osId, $dchSupported, $dch = Get-DriverLookupParameters $gpuName $isNotebook
+	$gpuId, $osId, $dchSupported, $dch = Get-DriverLookupParameters $gpuName
 	$driverDownloadInfo = Get-DriverDownloadInfo $gpuId $osId $dch
 
 	if ($driverDownloadInfo) {
