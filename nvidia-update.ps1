@@ -1,5 +1,5 @@
 <#PSScriptInfo
-.VERSION 1.15
+.VERSION 1.15.1
 .GUID dd04650b-78dc-4761-89bf-b6eeee74094c
 .AUTHOR ZenitH-AT
 .LICENSEURI https://raw.githubusercontent.com/ZenitH-AT/nvidia-update/main/LICENSE
@@ -29,6 +29,7 @@ New-Variable -Name "gpuDataFileUrl" -Value "https://raw.githubusercontent.com/Ze
 New-Variable -Name "osDataFileUrl" -Value "https://raw.githubusercontent.com/ZenitH-AT/nvidia-data/main/os-data.json" -Option Constant
 New-Variable -Name "driverLookupUri" -Value "$($AjaxDriverServiceUrl)?func=DriverManualLookup&pfid={0}&osID={1}&dch={2}" -Option Constant
 New-Variable -Name "osBits" -Value "$(if ([Environment]::Is64BitOperatingSystem) { 64 } else { 32 })" -Option Constant
+New-Variable -Name "cleanGpuNameRegex" -Value "(?<=NVIDIA )(.*(?= \([A-Z]+\))|.*(?= [0-9]+GB)|.*(?= COLLECTORS EDITION)|.*(?= with Max-Q Design)|.*)" -Option Constant
 New-Variable -Name "notebookChassisTypes" -Value @(8, 9, 10, 11, 12, 14, 18, 21, 31, 32) -Option Constant
 New-Variable -Name "dchSupportedOsIds" -Value @(56, 57, 135) -Option Constant
 New-Variable -Name "dataDividends" -Value @(1, 1024, 1048576) -Option Constant
@@ -242,7 +243,7 @@ function Get-GpuData {
 
 		if ($gpuName -match "^NVIDIA") {
 			# Clean GPU name, accounting for card variants (e.g., 1060 6GB, 760Ti (OEM))
-			if (-not ($gpuName -match "(?<=NVIDIA )(.*(?= \([A-Z]+\))|.*(?= [0-9]+GB)|.*(?= with Max-Q Design)|.*(?= COLLECTORS EDITION)|.*)")) {
+			if (-not ($gpuName -match $cleanGpuNameRegex)) {
 				Write-ExitError "`nUnrecognised GPU name $($gpuName). This should not happen."
 			}
 
