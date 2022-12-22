@@ -31,7 +31,6 @@ New-Variable -Name "driverLookupUri" -Value "$($AjaxDriverServiceUrl)?func=Drive
 New-Variable -Name "osBits" -Value "$(if ([Environment]::Is64BitOperatingSystem) { 64 } else { 32 })" -Option Constant
 New-Variable -Name "cleanGpuNameRegex" -Value "(?<=NVIDIA )(.*(?= \([A-Z]+\))|.*(?= [0-9]+GB)|.*(?= COLLECTORS EDITION)|.*(?= with Max-Q Design)|.*)" -Option Constant
 New-Variable -Name "notebookChassisTypes" -Value @(8, 9, 10, 11, 12, 14, 18, 21, 31, 32) -Option Constant
-New-Variable -Name "dchSupportedOsIds" -Value @(56, 57, 135) -Option Constant
 New-Variable -Name "dataDividends" -Value @(1, 1024, 1048576) -Option Constant
 New-Variable -Name "dataUnits" -Value @("B", "KiB", "MiB") -Option Constant
 
@@ -330,7 +329,7 @@ function Get-DriverLookupParameters {
 	}
 
 	# Check if DCH supported and if using DCH driver
-	$dchSupported = $osId -in $dchSupportedOsIds
+	$dchSupported = (Get-CimInstance -ClassName Win32_OperatingSystem).BuildNumber -ge 10240
 	$dch = $dchSupported -and (Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\nvlddmkm" -Name "DCHUVen" -ErrorAction Ignore)
 
 	return $gpuId, $osId, $dchSupported, $dch
