@@ -17,6 +17,8 @@ param (
 	[switch] $Notebook = $false, # Override the desktop/notebook check and download the notebook driver
 	[string] $DownloadDirectory = "$($env:TEMP)\NVIDIA", # The directory where the script will download and extract the driver package;
 	[switch] $KeepDownload = $false, # Don't delete the downloaded driver package after installation (or if an error occurred)
+	[string] $GpuDataFileUrl = "https://raw.githubusercontent.com/ZenitH-AT/nvidia-data/main/gpu-data.json", # GPU data JSON file URL/path
+	[string] $OsDataFileUrl = "https://raw.githubusercontent.com/ZenitH-AT/nvidia-data/main/os-data.json", # OS data JSON file URL/path
 	[string] $AjaxDriverServiceUrl = "https://gfwsl.geforce.com/services_toolkit/services/com/nvidia/services/AjaxDriverService.php" # AjaxDriverService URL; e.g., replace ".com" with ".cn" to solve connectivity issues
 )
 
@@ -25,8 +27,6 @@ New-Variable -Name "configFilePath" -Value "$($PSScriptRoot)\optional-components
 New-Variable -Name "currentReleaseVersion" -Value ([System.Version]::New("$(Test-ScriptFileInfo -Path $PSCommandPath | ForEach-Object VERSION)")) -Option Constant
 New-Variable -Name "scriptRepoUri" -Value "$(Test-ScriptFileInfo -Path $PSCommandPath | ForEach-Object PROJECTURI)" -Option Constant
 New-Variable -Name "defaultScriptFileName" -Value "nvidia-update.ps1" -Option Constant
-New-Variable -Name "gpuDataFileUrl" -Value "https://raw.githubusercontent.com/ZenitH-AT/nvidia-data/main/gpu-data.json" -Option Constant
-New-Variable -Name "osDataFileUrl" -Value "https://raw.githubusercontent.com/ZenitH-AT/nvidia-data/main/os-data.json" -Option Constant
 New-Variable -Name "driverLookupUri" -Value "$($AjaxDriverServiceUrl)?func=DriverManualLookup&pfid={0}&osID={1}&dch={2}" -Option Constant
 New-Variable -Name "osBits" -Value "$(if ([Environment]::Is64BitOperatingSystem) { 64 } else { 32 })" -Option Constant
 New-Variable -Name "cleanGpuNameRegex" -Value "(?<=NVIDIA )(.*(?= \([A-Z]+\))|.*(?= [0-9]+GB)|.*(?= COLLECTORS EDITION)|.*(?= with Max-Q Design)|.*)" -Option Constant
@@ -262,6 +262,19 @@ function Get-GpuData {
 	return $gpuName, $currentDriverVersion, $pnpDeviceId
 }
 
+function Test-Url {
+	param (
+		[Parameter(Mandatory)] [ValidateNotNullOrEmpty()] [string] $Url
+	)
+
+	try {
+		return [bool][System.Net.WebRequest]::Create($Url)
+	}
+	catch {
+		return $false
+	}
+}
+
 function Get-DriverLookupParameters {
 	param (
 		[Parameter(Mandatory)] [ValidateNotNullOrEmpty()] [string] $GpuName
@@ -275,11 +288,13 @@ function Get-DriverLookupParameters {
 
 	if (!$GpuId) {
 		try {
-			$gpuId = (Invoke-RestMethod -Uri $gpuDataFileUrl | ConvertTo-Json | ConvertFrom-Json).$gpuType.$GpuName
+			$gpuData = if (Test-Url $GpuDataFileUrl) { Invoke-RestMethod -Uri $GpuDataFileUrl } else { Get-Content -Path $GpuDataFileUrl | ConvertFrom-Json }
 		}
 		catch {
 			Write-ExitError "`nUnable to retrieve GPU data. Please try running this script again."
 		}
+
+		$gpuId = $gpuData.$gpuType.$GpuName
 	}
 
 	if (-not $gpuId) {
@@ -294,7 +309,7 @@ function Get-DriverLookupParameters {
 
 	if (!$OsId) {
 		try {
-			$osData = Invoke-RestMethod -Uri $osDataFileUrl
+			$osData = if (Test-Url $GpuDataFileUrl) { Invoke-RestMethod -Uri $OsDataFileUrl } else { Get-Content -Path $OsDataFileUrl | ConvertFrom-Json }
 		}
 		catch {
 			Write-ExitError "Unable to retrieve OS data. Please try running this script again."
