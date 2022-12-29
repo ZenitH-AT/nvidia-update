@@ -15,10 +15,10 @@ param (
 	[string] $OsId = $null, # Manually specify operating system ID rather than determine automatically
 	[switch] $Desktop = $false, # Override the desktop/notebook check and download the desktop driver; useful when using an external GPU or unable to find a driver
 	[switch] $Notebook = $false, # Override the desktop/notebook check and download the notebook driver
-	[string] $DownloadDirectory = "$($env:TEMP)\NVIDIA", # The directory where the script will download and extract the driver package;
+	[string] $DownloadDirectory = "$($env:TEMP)\NVIDIA", # Override the directory where the script will download and extract the driver package
 	[switch] $KeepDownload = $false, # Don't delete the downloaded driver package after installation (or if an error occurred)
-	[string] $GpuDataFileUrl = "https://raw.githubusercontent.com/ZenitH-AT/nvidia-data/main/gpu-data.json", # GPU data JSON file URL/path
-	[string] $OsDataFileUrl = "https://raw.githubusercontent.com/ZenitH-AT/nvidia-data/main/os-data.json", # OS data JSON file URL/path
+	[string] $GpuDataFileUrl = "https://raw.githubusercontent.com/ZenitH-AT/nvidia-data/main/gpu-data.json", # Override the GPU data JSON file URL/path for determining product family (GPU) ID
+	[string] $OsDataFileUrl = "https://raw.githubusercontent.com/ZenitH-AT/nvidia-data/main/os-data.json", # Override the OS data JSON file URL/path for determining operating system ID
 	[string] $AjaxDriverServiceUrl = "https://gfwsl.geforce.com/services_toolkit/services/com/nvidia/services/AjaxDriverService.php" # AjaxDriverService URL; e.g., replace ".com" with ".cn" to solve connectivity issues
 )
 
@@ -235,9 +235,7 @@ function Get-WebFile {
 }
 
 function Get-GpuData {
-	$gpus = @(Get-CimInstance Win32_VideoController | Select-Object Name, DriverVersion, PNPDeviceID)
-
-	foreach ($gpu in $gpus) {
+	foreach ($gpu in Get-CimInstance -Class Win32_VideoController) {
 		$gpuName = $gpu.Name
 
 		if ($gpuName -match "^NVIDIA") {
@@ -279,13 +277,11 @@ function Get-DriverLookupParameters {
 		[Parameter(Mandatory)] [ValidateNotNullOrEmpty()] [string] $GpuName
 	)
 
-	$isNotebook = [bool](Get-CimInstance -ClassName Win32_SystemEnclosure).ChassisTypes.Where({ $_ -in $notebookChassisTypes })
+	$isNotebook = [bool](Get-CimInstance -Class Win32_SystemEnclosure).ChassisTypes.Where({ $_ -in $notebookChassisTypes })
 	$gpuType = if ($Desktop -or -not ($Notebook -or $IsNotebook)) { "desktop" } else { "notebook" }
 
 	# Determine product family (GPU) ID
-	$gpuId = $GpuId # Initially assume user manually specified GPU ID
-
-	if (!$GpuId) {
+	if (-not $GpuId) {
 		try {
 			$gpuData = if (Test-Url $GpuDataFileUrl) { Invoke-RestMethod -Uri $GpuDataFileUrl } else { Get-Content -Path $GpuDataFileUrl | ConvertFrom-Json }
 		}
@@ -293,10 +289,10 @@ function Get-DriverLookupParameters {
 			Write-ExitError "`nUnable to retrieve GPU data. Please try running this script again."
 		}
 
-		$gpuId = $gpuData.$gpuType.$GpuName
+		$GpuId = $gpuData.$gpuType.$GpuName
 	}
 
-	if (-not $gpuId) {
+	if (-not $GpuId) {
 		Write-ExitError "`nUnable to determine GPU product family ID. This should not happen."
 	}
 
@@ -304,9 +300,7 @@ function Get-DriverLookupParameters {
 	$osVersion = "$([Environment]::OSVersion.Version.Major).$([Environment]::OSVersion.Version.Minor)"
 
 	# Determine operating system ID
-	$osId = $OsId # Initially assume user manually specified OS ID
-
-	if (!$OsId) {
+	if (-not $OsId) {
 		try {
 			$osData = if (Test-Url $GpuDataFileUrl) { Invoke-RestMethod -Uri $OsDataFileUrl } else { Get-Content -Path $OsDataFileUrl | ConvertFrom-Json }
 		}
@@ -317,22 +311,22 @@ function Get-DriverLookupParameters {
 		foreach ($os in $osData) {
 			# TODO: Improve Windows 11 detection (shouldn't matter for now since Windows 10 64-bit and Windows 11 use the same drivers)
 			if ($os.code -eq $osVersion -and $os.name -match $osBits) {
-				$osId = $os.id
+				$OsId = $os.id
 
 				break
 			}
 		}
 	}
 
-	if (-not $osId) {
+	if (-not $OsId) {
 		Write-ExitError "`nCould not find a driver supported by your operating system."
 	}
 
 	# Check if DCH supported and if using DCH driver
-	$dchSupported = (Get-CimInstance -ClassName Win32_OperatingSystem).BuildNumber -ge 10240
+	$dchSupported = (Get-CimInstance -Class Win32_OperatingSystem).BuildNumber -ge 10240
 	$dch = $dchSupported -and (Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\nvlddmkm" -Name "DCHUVen" -ErrorAction Ignore)
 
-	return $gpuId, $osId, $dchSupported, $dch
+	return $GpuId, $OsId, $dchSupported, $dch
 }
 
 function Get-DriverDownloadInfo {
@@ -432,6 +426,9 @@ function Start-Installation {
 	return $false
 }
 
+## Get PowerShell executable
+$powershellExe = if ($PSVersionTable.PSVersion.Major -lt 6) { "powershell" } else { "pwsh" }
+
 ## Register scheduled task if the "-Schedule" parameter is set
 if ($Schedule) {
 	$taskName = "nvidia-update $($currentReleaseVersion)"
@@ -461,9 +458,6 @@ if ($Msi) {
 		}
 	}
 }
-
-## Get PowerShell executable
-$powershellExe = if ($PSVersionTable.PSVersion.Major -lt 6) { "powershell" } else { "pwsh" }
 
 ## Check internet connection
 if (-not (Get-NetRoute | Where-Object DestinationPrefix -eq "0.0.0.0/0" | Get-NetIPInterface | Where-Object ConnectionState -eq "Connected")) {

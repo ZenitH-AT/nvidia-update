@@ -22,9 +22,11 @@ Fork of [lord-carlos/nvidia-update](https://github.com/lord-carlos/nvidia-update
 - `-OsId <string/int>` - Manually specify operating system ID rather than determine automatically
 - `-Desktop` - Override the desktop/notebook check and download the desktop driver; useful when using an external GPU or unable to find a driver
 - `-Notebook` - Override the desktop/notebook check and download the notebook driver
-- `-DownloadDirectory <string>` - The directory where the script will download and extract the driver package
+- `-DownloadDirectory <string>` - Override the directory where the script will download and extract the driver package
 - `-KeepDownload` - Don't delete the downloaded driver package after installation (or if an error occurred)
-- `-AjaxDriverServiceUrl <string>` - AjaxDriverService URL; e.g., replace ".com" in the default value ("https://gfwsl.geforce.com/services_toolkit/services/com/nvidia/services/AjaxDriverService.php") with ".cn" to solve connectivity issues
+- `-GpuDataFileUrl <string>` - Override the GPU data JSON file URL/path for determining product family (GPU) ID
+- `-OsDataFileUrl <string>` - Override the OS data JSON file URL/path for determining operating system ID
+- `-AjaxDriverServiceUrl <string>` - Override the AjaxDriverService URL; e.g., replace ".com" in the default value ("https://gfwsl.geforce.com/services_toolkit/services/com/nvidia/services/AjaxDriverService.php") with ".cn" to solve connectivity issues
 
 ### How to pass optional parameters
 
