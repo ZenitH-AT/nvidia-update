@@ -32,7 +32,7 @@ Fork of [lord-carlos/nvidia-update](https://github.com/lord-carlos/nvidia-update
 
 - While holding `⇧ Shift`, right-click in the folder with the script
 - Select `Open PowerShell window here`
-- Enter `.\nvidia-update.ps1 <parameters>` (e.g., `.\nvidia-update.ps1 -Clean -Directory "C:\NVIDIA"`)
+- Enter `.\nvidia-update.ps1 <parameters>` (e.g., `.\nvidia-update.ps1 -Clean -DownloadDirectory "C:\NVIDIA"`)
 
 ## Automatically running the script periodically
 
