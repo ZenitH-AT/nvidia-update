@@ -30,9 +30,9 @@ Fork of [lord-carlos/nvidia-update](https://github.com/lord-carlos/nvidia-update
 
 ### How to pass optional parameters
 
-- While holding `shift` press `right click` in the folder with the script
+- While holding `⇧ Shift`, right-click in the folder with the script
 - Select `Open PowerShell window here`
-- Enter `.\nvidia-update.ps1 <parameters>` (ex: `.\nvidia-update.ps1 -Clean -Directory "C:\NVIDIA"`)
+- Enter `.\nvidia-update.ps1 <parameters>` (e.g., `.\nvidia-update.ps1 -Clean -Directory "C:\NVIDIA"`)
 
 ## Automatically running the script periodically
 
