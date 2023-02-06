@@ -14,6 +14,8 @@ Fork of [lord-carlos/nvidia-update](https://github.com/lord-carlos/nvidia-update
 
 ### Optional parameters
 
+- `-Silent` - Run the script in the background; use default choice for any prompts
+- `-LogFilePath <string>` - Append output to a text file
 - `-Force` - Install the driver even if the latest driver is already installed
 - `-Clean` - Remove any existing driver and its configuration data
 - `-Msi` - Enable message-signalled interrupts (MSI) after driver installation (must be enabled every time); requires elevation
