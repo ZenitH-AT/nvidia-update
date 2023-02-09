@@ -87,6 +87,7 @@ The pfid and osID are determined by reading files in the [ZenitH-AT/nvidia-data]
 	- Driver downloading now uses this function, rather than `Start-BitsTransfer`, which occasionally [caused issues](https://i.imgur.com/TcCenpo.png).
 - Greatly improved error handling (script is now hopefully idiot-proof).
 - Loading animations are shown where applicable (e.g., "Installing driver... /").
+- The script can be ran silently, requiring no user input, as well as log output to a file.
 - Refactored and reorganised a ton of the code.
 - Implemented a few changes and fixes from the [BearGrylls](https://github.com/BearGrylls/nvidia-update) and [fl4pj4ck](https://github.com/fl4pj4ck/nvidia-update) forks, as well as [TinyNvidiaUpdateChecker](https://github.com/ElPumpo/TinyNvidiaUpdateChecker)
 
