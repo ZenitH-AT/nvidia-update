@@ -93,6 +93,7 @@ The pfid and osID are determined by reading files in the [ZenitH-AT/nvidia-data]
 
 ## Planned changes
 
+- GPU names should be determined using a PCI ID lookup service if no driver is already installed
 - Optional components should be selected from within the script and handle dependencies, like [NVCleanstall](https://www.techpowerup.com/nvcleanstall/).
 	- Dependencies can be determined by recursively reading `.nvi` files
 	- Will require implementing a simple TUI
