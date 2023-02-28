@@ -1,5 +1,5 @@
 <#PSScriptInfo
-.VERSION 1.15.2
+.VERSION 1.15.3
 .GUID dd04650b-78dc-4761-89bf-b6eeee74094c
 .AUTHOR ZenitH-AT
 .LICENSEURI https://raw.githubusercontent.com/ZenitH-AT/nvidia-update/main/LICENSE
@@ -409,7 +409,7 @@ function Show-LoadingAnimation {
 	Write-Host "  " -NoNewline
 
 	# Show loading animation until the process returns an exit code
-	while ($Process.HasExited) {
+	while (-not $Process.HasExited) {
 		$spinner | ForEach-Object {
 			Write-Host "`b$_" -NoNewline -ForegroundColor Yellow
 			Start-Sleep -Milliseconds 250
