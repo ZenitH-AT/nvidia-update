@@ -1,99 +1,96 @@
 # nvidia-update
 
-Checks for a new version of the NVIDIA Driver, downloads and installs it. Windows 10+ only and PowerShell 6+ recommended.
+Comprueba si hay una versión nueva del driver de NVIDIA y te avisa, o la descarga e instala **solo con el driver gráfico**, sin GeForce Experience, NVIDIA App ni telemetría. Solo Windows 10/11; se recomienda PowerShell 7 o superior.
 
-Fork of [lord-carlos/nvidia-update](https://github.com/lord-carlos/nvidia-update).
+Fork de [ZenitH-AT/nvidia-update](https://github.com/ZenitH-AT/nvidia-update) (abandonado desde 2023), que a su vez es un fork de [lord-carlos/nvidia-update](https://github.com/lord-carlos/nvidia-update).
 
-## Usage
+## Cambios respecto a ZenitH-AT/nvidia-update
 
-- Download the [latest release](https://github.com/ZenitH-AT/nvidia-update/releases/latest); `optional-components.cfg` is optional
-- If downloaded, modify `optional-components.cfg` to specify what optional components to include (e.g., PhysX; works like [NVSlimmer](https://forums.guru3d.com/threads/nvslimmer-nvidia-driver-slimming-utility.423072))
-	- If this file isn't present in the same directory as the script, only essential driver components (not listed in this file) will be installed
-- Right click `nvidia-update.ps1` and select `Run with PowerShell` (or run with optional parameters via a terminal; see below)
-- If the script finds a newer version of the NVIDIA driver, it will download and install it
+### Seguridad
+- **Sin autoactualización.** El original descargaba y ejecutaba versiones nuevas del script sin verificar nada. Ahora se actualiza a mano (`git pull`).
+- **Verificación de la firma del driver.** Antes de extraer o ejecutar nada, se comprueba que el instalador descargado y el `setup.exe` extraído tienen una firma Authenticode válida de **NVIDIA Corporation**. Si no, no se instala.
+- **Solo descarga de servidores de NVIDIA** (`*.nvidia.com`), y siempre por HTTPS.
+- **7-Zip se instala con winget**, que verifica el hash del instalador, en lugar de descargar la versión 22.01 de 2022 sin comprobar nada.
+- Eliminado `schedule.ps1`, que descargaba y ejecutaba el script del repo original. Ahora se usa `-Schedule`.
 
-### Optional parameters
+### Funcionalidad
+- **Modo solo aviso (`-NotifyOnly`).** Comprueba si hay driver nuevo y muestra una notificación de Windows, sin descargar ni instalar nada.
+- **Funciona con GPUs nuevas.** La lista de GPUs de ZenitH-AT/nvidia-data no se actualiza desde abril de 2025 (no incluye, por ejemplo, la RTX 5060 o la RTX 5050). Si tu GPU no está, o la consulta a NVIDIA falla, se usa como reserva la base de datos de NVCleanstall (`gpu.me`), que busca la GPU por su ID PCI. Es la misma reserva que usa TinyNvidiaUpdateChecker.
+- **Solo el driver gráfico por defecto.** `optional-components.cfg` ya no incluye el audio HD, PhysX ni el driver USB-C. Descomenta lo que necesites.
+- **Tarea programada al iniciar sesión y una vez al día**, en una ventana oculta y sin esperar respuesta. Antes era semanal, solo si el PC estaba inactivo, y en una ventana que se quedaba esperando a que pulsaras algo.
+- La comparación de versiones es numérica: ya no ofrece "actualizar" a un driver más antiguo que el instalado.
 
-- `-Silent` - Run the script in the background; use default choice for any prompts
-- `-LogFilePath <string>` - Append output to a text file
-- `-Force` - Install the driver even if the latest driver is already installed
-- `-Clean` - Remove any existing driver and its configuration data
-- `-Msi` - Enable message-signalled interrupts (MSI) after driver installation (must be enabled every time); requires elevation
-- `-Schedule` - Register a scheduled task to run this script weekly; arguments passed alongside this will be appended to the scheduled task action
-- `-GpuId <string/int>` - Manually specify product family (GPU) ID rather than determine automatically
-- `-OsId <string/int>` - Manually specify operating system ID rather than determine automatically
-- `-Desktop` - Override the desktop/notebook check and download the desktop driver; useful when using an external GPU or unable to find a driver
-- `-Notebook` - Override the desktop/notebook check and download the notebook driver
-- `-DownloadDirectory <string>` - Override the directory where the script will download and extract the driver package
-- `-KeepDownload` - Don't delete the downloaded driver package after installation (or if an error occurred)
-- `-GpuDataFileUrl <string>` - Override the GPU data JSON file URL/path for determining product family (GPU) ID
-- `-OsDataFileUrl <string>` - Override the OS data JSON file URL/path for determining operating system ID
-- `-AjaxDriverServiceUrl <string>` - Override the AjaxDriverService URL; e.g., replace ".com" in the default value ("https://gfwsl.geforce.com/services_toolkit/services/com/nvidia/services/AjaxDriverService.php") with ".cn" to solve connectivity issues
+### Errores corregidos del original
+- `-Silent` relanzaba el script sin el propio `-Silent`, así que se quedaba esperando respuesta en una ventana oculta.
+- `-Schedule` no pasaba a la tarea los parámetros indicados (`$MyInvocation.UnboundArguments` siempre estaba vacío).
+- En modo silencioso, si rechazabas el aviso de UAC, lo volvía a pedir sin parar.
+- La opción "Yes (upgrade to DCH driver)" no se aplicaba nunca (usaba una variable `$decision` que no existía).
+- Los datos de sistema operativo se cargaban comprobando la URL de los datos de GPU.
+- Ya no necesita 7-Zip si no hay nada que instalar.
 
-### How to pass optional parameters
+## Uso
 
-- While holding `⇧ Shift`, right-click in the folder with the script
-- Select `Open PowerShell window here`
-- Type `.\nvidia-update.ps1 <parameters>` (e.g., `.\nvidia-update.ps1 -Clean -DownloadDirectory "C:\NVIDIA"`) and hit `↵ Return`
-
-## Automatically running the script periodically
-
-Run the following PowerShell command to download the latest release files and create a scheduled task to run the script weekly with no optional parameters:
+1. Descarga o clona este repositorio (por ejemplo en `C:\Tools\nvidia-update`).
+2. Si lo necesitas, edita `optional-components.cfg` para añadir componentes (por ejemplo `HDAudio` si sacas el sonido por HDMI o DisplayPort).
+   - Si este archivo no está junto al script, solo se instalan los componentes esenciales.
+3. Abre PowerShell en esa carpeta y ejecuta:
 
 ```ps1
-Invoke-Expression (Invoke-WebRequest -Uri "https://github.com/ZenitH-AT/nvidia-update/raw/main/schedule.ps1")
+# Comprobar e instalar si hay versión nueva (te pregunta antes de instalar)
+.\nvidia-update.ps1
+
+# Solo comprobar y avisar con una notificación
+.\nvidia-update.ps1 -NotifyOnly
 ```
 
-To specify optional parameters for the scheduled task action, run a command similar to the following example, instead:
+Si Windows no te deja ejecutar scripts, ejecútalo así: `powershell -ExecutionPolicy Bypass -File .\nvidia-update.ps1`.
+
+### Comprobación automática
 
 ```ps1
-Invoke-Command ([ScriptBlock]::Create(".{$(Invoke-WebRequest -Uri "https://github.com/ZenitH-AT/nvidia-update/raw/main/schedule.ps1")} -Force -DownloadDir `"'C:\Users\user\NVIDIA download'`""))
+# Avisar con una notificación al iniciar sesión y cada día a las 12:00 (recomendado)
+.\nvidia-update.ps1 -Schedule -NotifyOnly
+
+# O bien instalar automáticamente (aparecerá el aviso de UAC al instalar)
+.\nvidia-update.ps1 -Schedule
 ```
 
-Surrounding an argument with `` `"' `` and `` '`" `` is required if it has spaces.
+La tarea se llama `nvidia-update 1.16.0` y la puedes ver o borrar en el Programador de tareas. Ejecuta el script desde la ruta donde esté cuando la registres, así que si lo mueves de carpeta, vuelve a ejecutar `-Schedule`. Si el registro falla, prueba a ejecutar PowerShell como administrador.
 
-## Requirements / Dependencies
+### Parámetros opcionales
 
-A supported archiver (7-Zip or WinRAR) is required to extract driver files.
+- `-Silent` - No pregunta nada; usa la opción por defecto en todas las preguntas
+- `-NotifyOnly` - Solo comprueba si hay driver nuevo y muestra una notificación de Windows; no descarga ni instala nada
+- `-LogFilePath <string>` - Añade la salida a un archivo de texto
+- `-Force` - Instala el driver aunque ya tengas la última versión
+- `-Clean` - Borra el driver existente y su configuración (instalación limpia)
+- `-Msi` - Activa las interrupciones MSI (message-signalled interrupts) tras instalar el driver (hay que activarlas en cada instalación); requiere ejecutar como administrador
+- `-Schedule` - Registra una tarea programada que ejecuta el script en silencio al iniciar sesión y cada día; los demás parámetros que pongas se pasan a la tarea
+- `-GpuId <string/int>` - Indica a mano el ID de familia de producto (GPU) en lugar de detectarlo
+- `-OsId <string/int>` - Indica a mano el ID de sistema operativo en lugar de detectarlo
+- `-Desktop` - Fuerza el driver de sobremesa; útil con una GPU externa o si no encuentra el driver
+- `-Notebook` - Fuerza el driver de portátil
+- `-DownloadDirectory <string>` - Cambia la carpeta donde se descarga y extrae el driver
+- `-KeepDownload` - No borra el instalador descargado después de instalar (o si hay un error)
+- `-GpuDataFileUrl <string>` - Cambia la URL o ruta del JSON de GPUs usado para obtener el ID de familia de producto
+- `-OsDataFileUrl <string>` - Cambia la URL o ruta del JSON de sistemas operativos usado para obtener el ID de sistema operativo
+- `-GpuMetadataUrl <string>` - Cambia la URL de la base de datos de reserva (por defecto `https://gpu.me/v1/index2.json`)
+- `-AjaxDriverServiceUrl <string>` - Cambia la URL de AjaxDriverService; por ejemplo, cambia ".com" por ".cn" si tienes problemas de conexión
 
-## How does the script check for the latest driver version?
+## Requisitos
 
-It uses the NVIDIA [AjaxDriverService](https://gfwsl.geforce.com/services_toolkit/services/com/nvidia/services/AjaxDriverService.php).
+- Un programa para extraer el driver: 7-Zip o WinRAR. Si no tienes ninguno, el script ofrece instalar 7-Zip con winget.
 
-Example:
+## ¿Cómo encuentra la última versión del driver?
 
-`https://gfwsl.geforce.com/services_toolkit/services/com/nvidia/services/AjaxDriverService.php?func=DriverManualLookup&pfid=877&osID=57&dch=1`
+1. Detecta tu GPU y la versión del driver instalado.
+2. Busca el ID de familia de producto de tu GPU (pfid) y el ID de tu sistema operativo (osID) en [ZenitH-AT/nvidia-data](https://github.com/ZenitH-AT/nvidia-data) y consulta la API de NVIDIA [AjaxDriverService](https://gfwsl.geforce.com/services_toolkit/services/com/nvidia/services/AjaxDriverService.php). Ejemplo:
 
-- **pfid**: Product Family (GPU) ID (e.g., _GeForce RTX 3070_: 933)
-- **osID**: Operating System ID (e.g., _Windows 10 64-bit_: 57)
-- **dch**: Windows Driver Type (_Standard_: 0; _DCH_: 1)
+   `https://gfwsl.geforce.com/services_toolkit/services/com/nvidia/services/AjaxDriverService.php?func=DriverManualLookup&pfid=877&osID=57&dch=1`
 
-The pfid and osID are determined by reading files in the [ZenitH-AT/nvidia-data](https://github.com/ZenitH-AT/nvidia-data) repository, which queries the NVIDIA Download API ([lookupValueSearch](https://www.nvidia.com/Download/API/lookupValueSearch.aspx)).
+   - **pfid**: ID de familia de producto (GPU) (por ejemplo, _GeForce RTX 3070_: 933)
+   - **osID**: ID de sistema operativo (por ejemplo, _Windows 10 64-bit_: 57)
+   - **dch**: tipo de driver de Windows (_Standard_: 0; _DCH_: 1)
 
-## How does this differ from lord-carlos/nvidia-update?
-
-- The script can now self-update.
-- Getting the download link now uses NVIDIA's AjaxDriverService. DCH drivers are now supported and there is no risk of the script not working if NVIDIA changes the download URL format. RP packages are not supported.
-- The GPU's product family ID (pfid) and operating system ID (osID) can now be determined by reading files in the [ZenitH-AT/nvidia-data](https://github.com/ZenitH-AT/nvidia-data) repository, rather than using static values, as older GPUs may use different drivers.
-- The user can now choose what optional driver components to include in the installation using the optional-components.cfg file.
-- The user can now enable message-signalled interrupts after driver installation by setting the `-Msi` optional parameter.
-- Simplified and improved checking whether to use the desktop or notebook driver and implemented parameters to override the check.
-- Simplified and improved the archiver program check, download and installation.
-- Simplified the OS version and architecture (`$osBits`) check and driver version comparison.
-- Simplified the GPU name and driver version retrieval (`Get-GpuData`).
-- Simplified and improved the scheduled task creation; now supports PowerShell 6+.
-- The script now checks for an internet connection before proceeding.
-- Implemented a function for downloading files (`Get-WebFile`).
-	- Driver downloading now uses this function, rather than `Start-BitsTransfer`, which occasionally [caused issues](https://i.imgur.com/TcCenpo.png).
-- Greatly improved error handling (script is now hopefully idiot-proof).
-- Loading animations are shown where applicable (e.g., "Installing driver... /").
-- The script can be ran silently, requiring no user input, as well as log output to a file.
-- Refactored and reorganised a ton of the code.
-- Implemented a few changes and fixes from the [BearGrylls](https://github.com/BearGrylls/nvidia-update) and [fl4pj4ck](https://github.com/fl4pj4ck/nvidia-update) forks, as well as [TinyNvidiaUpdateChecker](https://github.com/ElPumpo/TinyNvidiaUpdateChecker)
-
-## Planned changes
-
-- GPU names should be determined using a PCI ID lookup service if no driver is already installed
-- Optional components should be selected from within the script and handle dependencies, like [NVCleanstall](https://www.techpowerup.com/nvcleanstall/).
-	- Dependencies can be determined by recursively reading `.nvi` files
-	- Will require implementing a simple TUI
+3. Si tu GPU no está en esa lista o la consulta falla, busca tu GPU por su ID PCI en la base de datos de NVCleanstall (`gpu.me`) y construye la URL de descarga en `international.download.nvidia.com`.
+4. En cualquier caso, el instalador descargado solo se ejecuta si tiene una firma válida de NVIDIA Corporation.
